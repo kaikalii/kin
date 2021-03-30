@@ -1,0 +1,16 @@
+[package]
+authors = ['Kai Schmidt <kaikaliischmidt@gmail.com>']
+edition = '2018'
+name = 'noot'
+version = '0.1.0'
+
+[dependencies]
+clap.features = ['derive']
+clap.version = '3.0.0-beta.2'
+color-backtrace = '0.5'
+colored = '2'
+derive_more = '0.99'
+itertools = '0.10'
+rand = '0.8'
+rpds = '0.8'
+tokenate.path = '../tokenate'
