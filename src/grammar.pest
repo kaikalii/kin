@@ -1,7 +1,8 @@
-WHITESPACE = _{ " " | "\t" | "\r" }
+horiz_ws = _{ " " | "\t" | "\r" }
+WHITESPACE = _{ horiz_ws | "\n" }
 COMMENT = _{ "#" ~ (!"\n" ~ ANY)* ~ &"\n" }
 
-end_of_expr = _{ "\n" | "," }
+chain_call = { "," ~ horiz_ws* ~ "\n"? }
 
 keyword = { "true" | "false" | "is" | "isnt" | "and" | "or" }
 
@@ -14,16 +15,16 @@ real = @{ int ~ ("." ~ ASCII_DIGIT*)+ ~ (^"e" ~ int)? }
 string = { "\"" ~ (raw_string | escape)* ~ "\"" }
 raw_string = { (!("\\" | "\"") ~ ANY)+ }
 hex = _{ '0'..'9' | 'a'..'f' | 'A'..'F' }
-unicode_hex = { hex{1, 6} }
+unicode_hex = @{ hex{1, 6} }
 predefined = { "n" | "r" | "t" | "\\" | "0" | "\"" | "'" }
-byte       = { "x" ~ hex{2} }
-unicode    = { "u" ~ "{" ~ unicode_hex ~ "}" }
-escape     = { "\\" ~ (predefined | byte | unicode) }
+byte       = @{ "x" ~ hex{2} }
+unicode    = @{ "u" ~ "{" ~ unicode_hex ~ "}" }
+escape     = @{ "\\" ~ (predefined | byte | unicode) }
 
 // Idents
-ident_terminal_char = { LETTER }
-ident_inner_char = { ident_terminal_char | "_" }
-ident_inner = @{ ident_terminal_char ~ ident_inner_char* ~ ident_terminal_char }
+ident_start_char = { LETTER }
+ident_inner_char = { ident_start_char | "_" }
+ident_inner = @{ ident_start_char ~ ident_inner_char* }
 ident = { !keyword ~ ident_inner }
 
 // Operators
@@ -39,7 +40,8 @@ paren_expr = { "(" ~ expr ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
 term = { real | int | nat | bool_literal | nil | string | ident | paren_expr }
-expr_call = { term+ }
+expr_call_single = { term+ }
+expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
 expr_not = { op_not? ~ expr_call }
 expr_mdr = { expr_not ~ (op_mdr ~ expr_not)* }
 expr_as = { expr_mdr ~ (op_as ~ expr_mdr)* }
@@ -47,7 +49,7 @@ expr_cmp = { expr_as ~ (op_comp ~ expr_as)* }
 expr_and = { expr_cmp ~ (op_and ~ expr_cmp)* }
 expr_or = { expr_and ~ (op_or ~ expr_and)* }
 expr = { expr_or }
-expr_list = { (expr ~ end_of_expr?)+ }
+expr_list = { expr+ }
 
 // Items
 item = { expr_list }

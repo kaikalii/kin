@@ -16,7 +16,7 @@ pub enum Item {
 #[derive(Debug, Display, Clone)]
 #[display(
     fmt = "{}",
-    r#"items.iter().map(ToString::to_string).intersperse("\n".into()).collect::<String>()"#
+    r#"items.iter().map(ToString::to_string).intersperse("\n\n".into()).collect::<String>()"#
 )]
 pub struct Items {
     pub items: Vec<Item>,
@@ -215,74 +215,61 @@ fn _expression_size() {
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]
-pub enum ExprCall {
-    #[display(
-        fmt = "{}{}",
-        "term",
-        r#"args
-            .iter()
-            .map(ToString::to_string)
-            .intersperse(" ".into())
-            .collect::<String>()"#
-    )]
-    Regular { term: Term, args: Vec<Term> },
-    #[display(
-        fmt = "{}{}",
-        first,
-        r#"calls.iter().map(|call| format!(
-            ":{}({})", 
-            call.term, 
-            call.args.iter().map(ToString::to_string).intersperse(", ".into()).collect::<String>()
-        )).collect::<String>()"#
-    )]
-    Method { first: Term, calls: Vec<Call> },
+#[display(fmt = "{}", "self.format()")]
+pub struct ExprCall {
+    pub term: Term,
+    pub args: Vec<Term>,
+    pub chained: Option<String>,
+}
+
+impl ExprCall {
+    fn format(&self) -> String {
+        match &self.chained {
+            Some(sep) => {
+                let prev = self.args[0].to_string();
+                format!(
+                    "{}{}{} {}",
+                    &prev[1..prev.len() - 1],
+                    sep,
+                    self.term,
+                    self.args
+                        .iter()
+                        .skip(1)
+                        .map(ToString::to_string)
+                        .intersperse(" ".into())
+                        .collect::<String>()
+                )
+            }
+            None => {
+                format!(
+                    "{} {}",
+                    self.term,
+                    self.args
+                        .iter()
+                        .map(ToString::to_string)
+                        .intersperse(" ".into())
+                        .collect::<String>()
+                )
+            }
+        }
+    }
 }
 
 impl Node for ExprCall {
     type Child = Term;
     fn contains_ident(&self, ident: &str) -> bool {
-        match self {
-            ExprCall::Regular { term, args } => {
-                term.contains_ident(ident) || args.iter().any(|expr| expr.contains_ident(ident))
-            }
-            ExprCall::Method { first, calls } => {
-                first.contains_ident(ident)
-                    || calls.iter().any(|call| {
-                        call.term.contains_ident(ident)
-                            || call.args.iter().any(|expr| expr.contains_ident(ident))
-                    })
-            }
-        }
+        self.term.contains_ident(ident) || self.args.iter().any(|expr| expr.contains_ident(ident))
     }
     fn terms(&self) -> usize {
-        match self {
-            ExprCall::Regular { term, args } => {
-                term.terms() + args.iter().map(|expr| expr.terms()).sum::<usize>()
-            }
-            ExprCall::Method { first, calls } => {
-                first.terms()
-                    + calls
-                        .iter()
-                        .map(|call| {
-                            call.term.terms()
-                                + call.args.iter().map(|expr| expr.terms()).sum::<usize>()
-                        })
-                        .sum::<usize>()
-            }
-        }
+        self.term.terms() + self.args.iter().map(|expr| expr.terms()).sum::<usize>()
     }
     fn wrapping(child: Self::Child) -> Self {
-        ExprCall::Regular {
+        ExprCall {
             term: child,
             args: Vec::new(),
+            chained: None,
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Call {
-    pub term: Term,
-    pub args: Vec<Expression>,
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]

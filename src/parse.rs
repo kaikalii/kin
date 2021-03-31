@@ -36,7 +36,7 @@ fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
     let pair = only(pair);
     Ok(match pair.as_rule() {
         Rule::expr_list => Item::Expressions(parse_exprs(pair)?),
-        _ => unreachable!(),
+        rule => unreachable!("{:?}", rule),
     })
 }
 
@@ -44,8 +44,13 @@ fn parse_exprs(pair: Pair<Rule>) -> ParseResult<Expressions> {
     println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut exprs = Vec::new();
     for pair in pair.into_inner() {
-        let expr = parse_expr(pair)?;
-        exprs.push(expr);
+        match pair.as_rule() {
+            Rule::expr => {
+                let expr = parse_expr(pair)?;
+                exprs.push(expr);
+            }
+            rule => unreachable!("{:?}", rule),
+        }
     }
     Ok(Expressions { exprs })
 }
@@ -55,7 +60,7 @@ fn parse_expr(pair: Pair<Rule>) -> ParseResult<Expression> {
     let pair = only(pair);
     Ok(match pair.as_rule() {
         Rule::expr_or => parse_expr_or(pair)?,
-        _ => unreachable!(),
+        rule => unreachable!("{:?}", rule),
     })
 }
 
@@ -68,7 +73,7 @@ fn parse_expr_or(pair: Pair<Rule>) -> ParseResult<ExprOr> {
     for (op, right) in pairs.tuples() {
         let op = match op.as_str() {
             "or" => OpOr,
-            _ => unreachable!(),
+            rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_and(right)?;
         rights.push(Right { op, expr: right });
@@ -88,7 +93,7 @@ fn parse_expr_and(pair: Pair<Rule>) -> ParseResult<ExprAnd> {
     for (op, right) in pairs.tuples() {
         let op = match op.as_str() {
             "and" => OpAnd,
-            _ => unreachable!(),
+            rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_cmp(right)?;
         rights.push(Right { op, expr: right });
@@ -113,7 +118,7 @@ fn parse_expr_cmp(pair: Pair<Rule>) -> ParseResult<ExprCmp> {
             ">=" => OpCmp::GreaterOrEqual,
             "<" => OpCmp::Less,
             ">" => OpCmp::Greater,
-            _ => unreachable!(),
+            rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_as(right)?;
         rights.push(Right { op, expr: right });
@@ -134,7 +139,7 @@ fn parse_expr_as(pair: Pair<Rule>) -> ParseResult<ExprAS> {
         let op = match op.as_str() {
             "+" => OpAS::Add,
             "-" => OpAS::Sub,
-            _ => unreachable!(),
+            rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_mdr(right)?;
         rights.push(Right { op, expr: right });
@@ -156,7 +161,7 @@ fn parse_expr_mdr(pair: Pair<Rule>) -> ParseResult<ExprMDR> {
             "*" => OpMDR::Mul,
             "/" => OpMDR::Div,
             "%" => OpMDR::Rem,
-            _ => unreachable!(),
+            rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_not(right)?;
         rights.push(Right { op, expr: right });
@@ -186,15 +191,41 @@ fn parse_expr_not(pair: Pair<Rule>) -> ParseResult<ExprNot> {
 
 fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
     println!("{:?} {:?}", pair.as_rule(), pair.as_str());
-    let mut pairs = pair.into_inner();
-    let term = pairs.next().unwrap();
-    let term = parse_term(term)?;
-    let mut args = Vec::new();
+    let pairs = pair.into_inner();
+    let mut calls = Vec::new();
+    let mut chained = None;
     for pair in pairs {
-        let arg = parse_term(pair)?;
-        args.push(arg);
+        match pair.as_rule() {
+            Rule::expr_call_single => {
+                let mut pairs = pair.into_inner();
+                let term = parse_term(pairs.next().unwrap())?;
+                let mut args = Vec::new();
+                for pair in pairs {
+                    let arg = parse_term(pair)?;
+                    args.push(arg);
+                }
+                calls.push(ExprCall {
+                    term,
+                    args,
+                    chained: chained.take(),
+                });
+            }
+            Rule::chain_call => chained = Some(pair.as_str().into()),
+            rule => unreachable!("{:?}", rule),
+        }
     }
-    Ok(ExprCall::Regular { term, args })
+    let mut calls = calls.into_iter();
+    let mut call = calls.next().unwrap();
+    for mut chained_call in calls {
+        chained_call.args.insert(
+            0,
+            Term::wrapping(ExprOr::wrapping(ExprAnd::wrapping(ExprCmp::wrapping(
+                ExprAS::wrapping(ExprMDR::wrapping(ExprNot::wrapping(call))),
+            )))),
+        );
+        call = chained_call;
+    }
+    Ok(call)
 }
 
 fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
@@ -216,7 +247,7 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
             let string = parse_string_literal(pair);
             Term::String(string)
         }
-        _ => unreachable!(),
+        rule => unreachable!("{:?}", rule),
     })
 }
 
@@ -260,10 +291,10 @@ fn parse_string_literal(pair: Pair<Rule>) -> std::string::String {
                                 .unwrap_or_else(|| panic!("invalid unicode {}", u)),
                         );
                     }
-                    _ => unreachable!(),
+                    rule => unreachable!("{:?}", rule),
                 }
             }
-            _ => unreachable!(),
+            rule => unreachable!("{:?}", rule),
         }
     }
     s
