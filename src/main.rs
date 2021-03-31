@@ -9,7 +9,6 @@ fn main() {
     let input = std::fs::read_to_string("test.noot").unwrap();
     match parse::parse(&input) {
         Ok(items) => {
-            println!("{:#?}", items);
             println!("{}", items);
         }
         Err(e) => println!("{}", e),

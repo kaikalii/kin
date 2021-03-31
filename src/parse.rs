@@ -23,6 +23,7 @@ pub fn parse(input: &str) -> ParseResult<Items> {
 }
 
 fn parse_items(pair: Pair<Rule>) -> ParseResult<Items> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut items = Vec::new();
     for pair in pair.into_inner() {
         items.push(parse_item(pair)?);
@@ -31,6 +32,7 @@ fn parse_items(pair: Pair<Rule>) -> ParseResult<Items> {
 }
 
 fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let pair = only(pair);
     Ok(match pair.as_rule() {
         Rule::expr_list => Item::Expressions(parse_exprs(pair)?),
@@ -39,6 +41,7 @@ fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
 }
 
 fn parse_exprs(pair: Pair<Rule>) -> ParseResult<Expressions> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut exprs = Vec::new();
     for pair in pair.into_inner() {
         let expr = parse_expr(pair)?;
@@ -48,6 +51,7 @@ fn parse_exprs(pair: Pair<Rule>) -> ParseResult<Expressions> {
 }
 
 fn parse_expr(pair: Pair<Rule>) -> ParseResult<Expression> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let pair = only(pair);
     Ok(match pair.as_rule() {
         Rule::expr_or => parse_expr_or(pair)?,
@@ -56,6 +60,7 @@ fn parse_expr(pair: Pair<Rule>) -> ParseResult<Expression> {
 }
 
 fn parse_expr_or(pair: Pair<Rule>) -> ParseResult<ExprOr> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_and(left)?;
@@ -75,6 +80,7 @@ fn parse_expr_or(pair: Pair<Rule>) -> ParseResult<ExprOr> {
 }
 
 fn parse_expr_and(pair: Pair<Rule>) -> ParseResult<ExprAnd> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_cmp(left)?;
@@ -94,6 +100,7 @@ fn parse_expr_and(pair: Pair<Rule>) -> ParseResult<ExprAnd> {
 }
 
 fn parse_expr_cmp(pair: Pair<Rule>) -> ParseResult<ExprCmp> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_as(left)?;
@@ -118,6 +125,7 @@ fn parse_expr_cmp(pair: Pair<Rule>) -> ParseResult<ExprCmp> {
 }
 
 fn parse_expr_as(pair: Pair<Rule>) -> ParseResult<ExprAS> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_mdr(left)?;
@@ -138,6 +146,7 @@ fn parse_expr_as(pair: Pair<Rule>) -> ParseResult<ExprAS> {
 }
 
 fn parse_expr_mdr(pair: Pair<Rule>) -> ParseResult<ExprMDR> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_not(left)?;
@@ -159,6 +168,7 @@ fn parse_expr_mdr(pair: Pair<Rule>) -> ParseResult<ExprMDR> {
 }
 
 fn parse_expr_not(pair: Pair<Rule>) -> ParseResult<ExprNot> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut pairs = pair.into_inner();
     let first = pairs.next().unwrap();
     let op = match first.as_str() {
@@ -175,6 +185,7 @@ fn parse_expr_not(pair: Pair<Rule>) -> ParseResult<ExprNot> {
 }
 
 fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut pairs = pair.into_inner();
     let term = pairs.next().unwrap();
     let term = parse_term(term)?;
@@ -187,17 +198,73 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
 }
 
 fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let pair = only(pair);
     Ok(match pair.as_rule() {
         Rule::nat => Term::Nat(pair.as_str().parse().unwrap()),
         Rule::int => Term::Int(pair.as_str().parse().unwrap()),
         Rule::real => Term::Real(pair.as_str().parse().unwrap()),
-        Rule::ident => unimplemented!(),
+        Rule::nil => Term::Nil,
+        Rule::bool_literal => Term::Bool(pair.as_str() == "true"),
+        Rule::ident => Term::Ident(pair.as_str().into()),
         Rule::paren_expr => {
-            let pair = pair.into_inner().nth(1).unwrap();
+            let pair = only(pair);
             let expr = parse_expr(pair)?;
             Term::Expr(expr.into())
         }
+        Rule::string => {
+            let string = parse_string_literal(pair);
+            Term::String(string)
+        }
         _ => unreachable!(),
     })
+}
+
+fn parse_string_literal(pair: Pair<Rule>) -> std::string::String {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    let mut s = String::new();
+    for pair in pair.into_inner() {
+        match pair.as_rule() {
+            Rule::raw_string => s.push_str(pair.as_str()),
+            Rule::escape => {
+                let pair = only(pair);
+                match pair.as_rule() {
+                    Rule::predefined => s.push(match pair.as_str() {
+                        "0" => '\0',
+                        "r" => '\r',
+                        "t" => '\t',
+                        "n" => '\n',
+                        "\\" => '\\',
+                        "'" => '\'',
+                        "\"" => '"',
+                        s => unreachable!("{}", s),
+                    }),
+                    Rule::byte => {
+                        let byte = pair
+                            .into_inner()
+                            .map(|pair| pair.as_str())
+                            .collect::<String>()
+                            .parse::<u8>()
+                            .unwrap();
+                        s.push(byte as char);
+                    }
+                    Rule::unicode => {
+                        let u = pair
+                            .into_inner()
+                            .map(|pair| pair.as_str())
+                            .collect::<String>()
+                            .parse::<u32>()
+                            .unwrap();
+                        s.push(
+                            std::char::from_u32(u)
+                                .unwrap_or_else(|| panic!("invalid unicode {}", u)),
+                        );
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+    s
 }
