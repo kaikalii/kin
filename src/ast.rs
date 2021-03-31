@@ -1,4 +1,4 @@
-#![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::upper_case_acronyms, dead_code)]
 
 use std::fmt;
 
@@ -6,36 +6,39 @@ use colored::Colorize;
 use derive_more::Display;
 use itertools::Itertools;
 
-use crate::num::Num;
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Display, Clone)]
 pub enum Item {
     FunctionDecl(FunctionDecl),
-    Expression(Expression),
+    Expressions(Expressions),
     Assignment(Assignment),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Display, Clone)]
+#[display(
+    fmt = "{}",
+    r#"items.iter().map(ToString::to_string).intersperse("\n".into()).collect::<String>()"#
+)]
 pub struct Items {
     pub items: Vec<Item>,
 }
 
-#[derive(Debug, Display, Clone, PartialEq, Eq)]
+#[derive(Debug, Display, Clone, PartialEq)]
 #[display(
-    fmt = r#"function.body.iter().map(ToString::to_string).intersperse("; ".into()).collect::<String>()"#
+    fmt = "{}",
+    r#"exprs.iter().map(ToString::to_string).intersperse("\n".into()).collect::<String>()"#
 )]
 pub struct Expressions {
     pub exprs: Vec<Expression>,
 }
 
-#[derive(Debug, Display, Clone, PartialEq, Eq)]
+#[derive(Debug, Display, Clone, PartialEq)]
 #[display(fmt = "{} = {}", "ident.bright_white()", expr)]
 pub struct Assignment {
     pub ident: String,
     pub expr: Expression,
 }
 
-#[derive(Debug, Display, Clone, PartialEq, Eq)]
+#[derive(Debug, Display, Clone, PartialEq)]
 #[display(
     fmt = "{} {}({}) {}",
     r#""fn".magenta()"#,
@@ -48,7 +51,7 @@ pub struct FunctionDecl {
     pub function: Function,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Args {
     pub idents: Vec<String>,
 }
@@ -128,14 +131,9 @@ impl<O, T> Right<O, T> {
 }
 
 #[derive(Debug, Display, Clone, PartialEq, Eq)]
-#[display(
-    fmt = "{}{}",
-    r#"(0..*count).map(|_| "not ").collect::<String>()"#,
-    expr
-)]
+#[display(fmt = "{}{}", r#"if op.is_some() { "not " } else { "" }"#, expr)]
 pub struct UnExpr<O, T> {
-    pub op: O,
-    pub count: usize,
+    pub op: Option<O>,
     pub expr: T,
 }
 
@@ -153,8 +151,7 @@ where
     }
     fn wrapping(child: Self::Child) -> Self {
         UnExpr {
-            op: O::default(),
-            count: 0,
+            op: None,
             expr: child,
         }
     }
@@ -217,22 +214,18 @@ fn _expression_size() {
     let _: [u8; 32] = unsafe { std::mem::transmute::<Expression, _>(std::mem::zeroed()) };
 }
 
-#[derive(Debug, Display, Clone, PartialEq, Eq)]
+#[derive(Debug, Display, Clone, PartialEq)]
 pub enum ExprCall {
     #[display(
         fmt = "{}{}",
         "term",
-        r#"args.as_ref().map(|args| args
+        r#"args
             .iter()
             .map(ToString::to_string)
-            .intersperse(", ".into())
-            .collect::<String>()
-        ).map(|s| format!("({})", s)).unwrap_or_default()"#
+            .intersperse(" ".into())
+            .collect::<String>()"#
     )]
-    Regular {
-        term: Term,
-        args: Option<Vec<Expression>>,
-    },
+    Regular { term: Term, args: Vec<Term> },
     #[display(
         fmt = "{}{}",
         first,
@@ -250,10 +243,7 @@ impl Node for ExprCall {
     fn contains_ident(&self, ident: &str) -> bool {
         match self {
             ExprCall::Regular { term, args } => {
-                term.contains_ident(ident)
-                    || args.as_ref().map_or(false, |args| {
-                        args.iter().any(|expr| expr.contains_ident(ident))
-                    })
+                term.contains_ident(ident) || args.iter().any(|expr| expr.contains_ident(ident))
             }
             ExprCall::Method { first, calls } => {
                 first.contains_ident(ident)
@@ -267,10 +257,7 @@ impl Node for ExprCall {
     fn terms(&self) -> usize {
         match self {
             ExprCall::Regular { term, args } => {
-                term.terms()
-                    + args.as_ref().map_or(0, |args| {
-                        args.iter().map(|expr| expr.terms()).sum::<usize>()
-                    })
+                term.terms() + args.iter().map(|expr| expr.terms()).sum::<usize>()
             }
             ExprCall::Method { first, calls } => {
                 first.terms()
@@ -287,23 +274,27 @@ impl Node for ExprCall {
     fn wrapping(child: Self::Child) -> Self {
         ExprCall::Regular {
             term: child,
-            args: None,
+            args: Vec::new(),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Call {
     pub term: Term,
     pub args: Vec<Expression>,
 }
 
-#[derive(Debug, Display, Clone, PartialEq, Eq)]
+#[derive(Debug, Display, Clone, PartialEq)]
 pub enum Term {
     #[display(fmt = "({})", _0)]
     Expr(Box<Expression>),
     #[display(fmt = "{}", "_0.to_string().blue()")]
-    Num(Num),
+    Nat(u64),
+    #[display(fmt = "{}", "_0.to_string().blue()")]
+    Int(i64),
+    #[display(fmt = "{}", "_0.to_string().blue()")]
+    Real(f64),
     #[display(fmt = "{}", "_0.bright_white()")]
     Ident(String),
     #[display(fmt = "{}", "_0.to_string().blue()")]
@@ -337,7 +328,7 @@ impl Node for Term {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Function {
     pub args: Args,
     pub body: Expressions,

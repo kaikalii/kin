@@ -1,0 +1,35 @@
+WHITESPACE = _{ " " | "\t" | "\r" }
+
+end_of_expr = _{ "\n" | "," }
+
+// Numbers
+nat = @{ ASCII_DIGIT+ }
+int = @{ ("+" | "-")+ ~ nat }
+real = @{ int ~ ("." ~ ASCII_DIGIT*)+ ~ (^"e" ~ int)? }
+
+// Idents
+ident_terminal_char = { LETTER }
+ident_inner_char = { ident_terminal_char | "_" }
+ident = @{ ident_terminal_char ~ ident_inner_char* ~ ident_terminal_char }
+
+// Operators
+op_as = { "+" | "-" }
+op_mdr = { "*" | "/" | "%" }
+op_comp = { "is" | "isnt" | "<=" | ">=" | "<" | ">" }
+
+// Expressions
+paren_expr = { "(" ~ expr ~ ")" }
+term = { real | int | nat | ident | paren_expr }
+expr_call = { term+ }
+expr_not = { "not"? ~ expr_call }
+expr_mdr = { expr_not ~ (op_mdr ~ expr_not)* }
+expr_as = { expr_mdr ~ (op_as ~ expr_mdr)* }
+expr_cmp = { expr_as ~ (op_comp ~ expr_as)* }
+expr_and = { expr_cmp ~ ("and" ~ expr_cmp)* }
+expr_or = { expr_and ~ ("or" ~ expr_and)* }
+expr = { expr_or }
+expr_list = { (expr ~ end_of_expr)* ~ expr }
+
+// Items
+item = { expr_list }
+items = { item* }
