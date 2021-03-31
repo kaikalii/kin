@@ -1,7 +1,11 @@
 #![allow(clippy::upper_case_acronyms)]
 
 use itertools::Itertools;
-use pest::{error::Error as PestError, iterators::Pair, Parser, RuleType};
+use pest::{
+    error::{Error as PestError, ErrorVariant},
+    iterators::Pair,
+    Parser, RuleType, Span,
+};
 
 use crate::ast::*;
 
@@ -19,7 +23,23 @@ where
 struct NootParser;
 
 pub fn parse(input: &str) -> ParseResult<Items> {
-    NootParser::parse(Rule::items, &input).and_then(|mut pairs| parse_items(pairs.next().unwrap()))
+    match NootParser::parse(Rule::items, &input) {
+        Ok(mut pairs) => {
+            let pair = pairs.next().unwrap();
+            let parsed_len = pair.as_str().len();
+            if parsed_len < input.len() {
+                let extra = input[parsed_len..].split_whitespace().next().unwrap();
+                return Err(PestError::new_from_span(
+                    ErrorVariant::CustomError {
+                        message: format!("Invalid token: {}", extra),
+                    },
+                    Span::new(input, parsed_len, parsed_len + extra.len()).unwrap(),
+                ));
+            }
+            parse_items(pair)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 fn parse_items(pair: Pair<Rule>) -> ParseResult<Items> {
@@ -42,8 +62,15 @@ fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
 
 fn parse_exprs(pair: Pair<Rule>) -> ParseResult<Expressions> {
     println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    parse_exprs_impl(pair.into_inner())
+}
+
+fn parse_exprs_impl<'a, P>(pairs: P) -> ParseResult<Expressions>
+where
+    P: Iterator<Item = Pair<'a, Rule>>,
+{
     let mut exprs = Vec::new();
-    for pair in pair.into_inner() {
+    for pair in pairs {
         match pair.as_rule() {
             Rule::expr => {
                 let expr = parse_expr(pair)?;
@@ -246,6 +273,25 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
         Rule::string => {
             let string = parse_string_literal(pair);
             Term::String(string)
+        }
+        Rule::inline_function => {
+            let mut pairs = pair.into_inner();
+            let mut idents = Vec::new();
+            while let Some(ident_pair) = pairs.next() {
+                if ident_pair.as_rule() == Rule::ident {
+                    idents.push(ident_pair.as_str().to_owned());
+                } else {
+                    break;
+                }
+            }
+            let body = parse_exprs_impl(pairs.by_ref())?;
+            Term::Function(
+                Function {
+                    params: Params { idents },
+                    body,
+                }
+                .into(),
+            )
         }
         rule => unreachable!("{:?}", rule),
     })

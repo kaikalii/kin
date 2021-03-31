@@ -1,8 +1,11 @@
 horiz_ws = _{ " " | "\t" | "\r" }
-WHITESPACE = _{ horiz_ws | "\n" }
+WHITESPACE = _{ horiz_ws }
+// single_line_comment = @{ "#" ~ (!"\n" ~ ANY)* ~ &"\n" }
+// multi_line_comment = @{ "#/" ~ (!"/#" ~ ANY)* ~ "/#" }
 COMMENT = _{ "#" ~ (!"\n" ~ ANY)* ~ &"\n" }
 
 chain_call = { "," ~ horiz_ws* ~ "\n"? }
+sep_expr = _{ ";" | "\n" }
 
 keyword = { "true" | "false" | "is" | "isnt" | "and" | "or" }
 
@@ -39,7 +42,9 @@ op_not = { "not" }
 paren_expr = { "(" ~ expr ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
-term = { real | int | nat | bool_literal | nil | string | ident | paren_expr }
+fat_arrow = { "=>" }
+inline_function = { (ident+ | "()") ~ fat_arrow ~ expr}
+term = { real | int | nat | bool_literal | nil | string | inline_function | ident | paren_expr }
 expr_call_single = { term+ }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
 expr_not = { op_not? ~ expr_call }
@@ -49,8 +54,8 @@ expr_cmp = { expr_as ~ (op_comp ~ expr_as)* }
 expr_and = { expr_cmp ~ (op_and ~ expr_cmp)* }
 expr_or = { expr_and ~ (op_or ~ expr_and)* }
 expr = { expr_or }
-expr_list = { expr+ }
+expr_list = { (expr ~ sep_expr*)+ }
 
 // Items
 item = { expr_list }
-items = { item+ }
+items = { item* }

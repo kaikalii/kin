@@ -16,7 +16,7 @@ pub enum Item {
 #[derive(Debug, Display, Clone)]
 #[display(
     fmt = "{}",
-    r#"items.iter().map(ToString::to_string).intersperse("\n\n".into()).collect::<String>()"#
+    r#"items.iter().map(ToString::to_string).intersperse("\n\n\n".into()).collect::<String>()"#
 )]
 pub struct Items {
     pub items: Vec<Item>,
@@ -25,7 +25,8 @@ pub struct Items {
 #[derive(Debug, Display, Clone, PartialEq)]
 #[display(
     fmt = "{}",
-    r#"exprs.iter().map(ToString::to_string).intersperse("\n".into()).collect::<String>()"#
+    r#"exprs.iter().map(|expr| format!("{{{}}}", expr)).intersperse("\n\n".into()).collect::<String>()"#
+    // r#"exprs.iter().map(|e| e.to_string()).intersperse("\n\n".into()).collect::<String>()"#
 )]
 pub struct Expressions {
     pub exprs: Vec<Expression>,
@@ -43,7 +44,7 @@ pub struct Assignment {
     fmt = "{} {}({}) {}",
     r#""fn".magenta()"#,
     "ident.bright_white()",
-    "function.args",
+    "function.params",
     "function.body"
 )]
 pub struct FunctionDecl {
@@ -52,16 +53,20 @@ pub struct FunctionDecl {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct Args {
+pub struct Params {
     pub idents: Vec<String>,
 }
 
-impl fmt::Display for Args {
+impl fmt::Display for Params {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for s in self.idents.iter().map(AsRef::as_ref).intersperse(", ") {
-            write!(f, "{}", s)?;
+        if self.idents.is_empty() {
+            write!(f, "()")
+        } else {
+            for s in self.idents.iter().map(AsRef::as_ref).intersperse(", ") {
+                write!(f, "{}", s)?;
+            }
+            Ok(())
         }
-        Ok(())
     }
 }
 
@@ -214,20 +219,20 @@ fn _expression_size() {
     let _: [u8; 32] = unsafe { std::mem::transmute::<Expression, _>(std::mem::zeroed()) };
 }
 
-#[derive(Debug, Display, Clone, PartialEq)]
-#[display(fmt = "{}", "self.format()")]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExprCall {
     pub term: Term,
     pub args: Vec<Term>,
     pub chained: Option<String>,
 }
 
-impl ExprCall {
-    fn format(&self) -> String {
+impl fmt::Display for ExprCall {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.chained {
             Some(sep) => {
                 let prev = self.args[0].to_string();
-                format!(
+                write!(
+                    f,
                     "{}{}{} {}",
                     &prev[1..prev.len() - 1],
                     sep,
@@ -241,9 +246,11 @@ impl ExprCall {
                 )
             }
             None => {
-                format!(
-                    "{} {}",
+                write!(
+                    f,
+                    "{}{}{}",
                     self.term,
+                    if self.args.is_empty() { "" } else { " " },
                     self.args
                         .iter()
                         .map(ToString::to_string)
@@ -286,7 +293,7 @@ pub enum Term {
     Ident(String),
     #[display(fmt = "{}", "_0.to_string().blue()")]
     Bool(bool),
-    #[display(fmt = "{}", "format!(\"{:?}\", _0).green()")]
+    #[display(fmt = "{}", "format!(\"{:?}\", _0).yellow()")]
     String(String),
     Function(Box<Function>),
     #[display(fmt = "{}", "\"nil\".blue()")]
@@ -317,14 +324,13 @@ impl Node for Term {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function {
-    pub args: Args,
+    pub params: Params,
     pub body: Expressions,
-    pub bar: bool,
 }
 
 impl Function {
     fn contains_ident(&self, ident: &str) -> bool {
-        self.args.idents.iter().any(|arg| arg == ident)
+        self.params.idents.iter().any(|arg| arg == ident)
             || self
                 .body
                 .exprs
@@ -335,17 +341,6 @@ impl Function {
 
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}{}{} {}",
-            if self.bar {
-                "|".normal().to_string()
-            } else {
-                format!("{}{}", "fn".magenta(), '(')
-            },
-            self.args,
-            if self.bar { "|" } else { ")" },
-            self.body
-        )
+        write!(f, "{} => {}", self.params, self.body)
     }
 }
