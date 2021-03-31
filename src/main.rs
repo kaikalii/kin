@@ -1,7 +1,6 @@
 #![allow(unstable_name_collisions)]
 
 mod ast;
-mod num;
 mod parse;
 
 fn main() {
