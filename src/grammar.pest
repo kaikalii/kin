@@ -39,11 +39,11 @@ op_or = { "or" }
 op_not = { "not" }
 
 // Expressions
-paren_expr = { "(" ~ expr ~ ")" }
+paren_expr = { "(" ~ items ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
 fat_arrow = { "=>" }
-inline_function = { (ident+ | "()") ~ fat_arrow ~ expr}
+inline_function = { (ident+ | "()") ~ fat_arrow ~ expr_list}
 term = { real | int | nat | bool_literal | nil | string | inline_function | ident | paren_expr }
 expr_call_single = { term+ }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
@@ -58,4 +58,5 @@ expr_list = { (expr ~ sep_expr*)+ }
 
 // Items
 item = { expr_list }
-items = { item* }
+items = { item+ }
+file = { item* }

@@ -246,8 +246,10 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
     for mut chained_call in calls {
         chained_call.args.insert(
             0,
-            Term::wrapping(ExprOr::wrapping(ExprAnd::wrapping(ExprCmp::wrapping(
-                ExprAS::wrapping(ExprMDR::wrapping(ExprNot::wrapping(call))),
+            Term::wrapping(Items::wrapping(Item::wrapping(Expressions::wrapping(
+                ExprOr::wrapping(ExprAnd::wrapping(ExprCmp::wrapping(ExprAS::wrapping(
+                    ExprMDR::wrapping(ExprNot::wrapping(call)),
+                )))),
             )))),
         );
         call = chained_call;
@@ -268,7 +270,7 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
         Rule::paren_expr => {
             let pair = only(pair);
             let expr = parse_expr(pair)?;
-            Term::Expr(expr.into())
+            Term::wrapping(Items::wrapping(Item::wrapping(Expressions::wrapping(expr))))
         }
         Rule::string => {
             let string = parse_string_literal(pair);
@@ -284,7 +286,7 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
                     break;
                 }
             }
-            let body = parse_exprs_impl(pairs.by_ref())?;
+            let body = parse_exprs(pairs.next().unwrap())?;
             Term::Function(
                 Function {
                     params: Params { idents },

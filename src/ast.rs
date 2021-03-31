@@ -6,30 +6,69 @@ use colored::Colorize;
 use derive_more::Display;
 use itertools::Itertools;
 
-#[derive(Debug, Display, Clone)]
+#[derive(Debug, Display, Clone, PartialEq)]
 pub enum Item {
     FunctionDecl(FunctionDecl),
     Expressions(Expressions),
     Assignment(Assignment),
 }
 
-#[derive(Debug, Display, Clone)]
-#[display(
-    fmt = "{}",
-    r#"items.iter().map(ToString::to_string).intersperse("\n\n\n".into()).collect::<String>()"#
-)]
-pub struct Items {
-    pub items: Vec<Item>,
+impl Node for Item {
+    type Child = Expressions;
+    fn contains_ident(&self, ident: &str) -> bool {
+        todo!()
+    }
+    fn terms(&self) -> usize {
+        todo!()
+    }
+    fn wrapping(child: Self::Child) -> Self {
+        Item::Expressions(child)
+    }
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]
 #[display(
     fmt = "{}",
-    r#"exprs.iter().map(|expr| format!("{{{}}}", expr)).intersperse("\n\n".into()).collect::<String>()"#
-    // r#"exprs.iter().map(|e| e.to_string()).intersperse("\n\n".into()).collect::<String>()"#
+    r#"items.iter().map(ToString::to_string).intersperse("\n\n".into()).collect::<String>()"#
+)]
+pub struct Items {
+    pub items: Vec<Item>,
+}
+
+impl Node for Items {
+    type Child = Item;
+    fn contains_ident(&self, ident: &str) -> bool {
+        self.items.iter().any(|item| item.contains_ident(ident))
+    }
+    fn terms(&self) -> usize {
+        self.items.iter().map(Item::terms).sum()
+    }
+    fn wrapping(child: Self::Child) -> Self {
+        Items { items: vec![child] }
+    }
+}
+
+#[derive(Debug, Display, Clone, PartialEq)]
+#[display(
+    fmt = "{}",
+    // r#"exprs.iter().map(|expr| format!("{{{}}}", expr)).intersperse("\n".into()).collect::<String>()"#
+    r#"exprs.iter().map(|e| e.to_string()).intersperse("\n\n".into()).collect::<String>()"#
 )]
 pub struct Expressions {
     pub exprs: Vec<Expression>,
+}
+
+impl Node for Expressions {
+    type Child = Expression;
+    fn contains_ident(&self, ident: &str) -> bool {
+        self.exprs.iter().any(|expr| expr.contains_ident(ident))
+    }
+    fn terms(&self) -> usize {
+        self.exprs.iter().map(Expression::terms).sum()
+    }
+    fn wrapping(child: Self::Child) -> Self {
+        Expressions { exprs: vec![child] }
+    }
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]
@@ -282,7 +321,7 @@ impl Node for ExprCall {
 #[derive(Debug, Display, Clone, PartialEq)]
 pub enum Term {
     #[display(fmt = "({})", _0)]
-    Expr(Box<Expression>),
+    Expr(Box<Items>),
     #[display(fmt = "{}", "_0.to_string().blue()")]
     Nat(u64),
     #[display(fmt = "{}", "_0.to_string().blue()")]
@@ -301,18 +340,18 @@ pub enum Term {
 }
 
 impl Node for Term {
-    type Child = Expression;
+    type Child = Items;
     fn contains_ident(&self, ident: &str) -> bool {
         match self {
-            Term::Expr(expr) => expr.contains_ident(ident),
+            Term::Expr(items) => items.contains_ident(ident),
             Term::Ident(p) => p == ident,
             Term::Function(f) => f.contains_ident(ident),
             _ => false,
         }
     }
     fn terms(&self) -> usize {
-        if let Term::Expr(expr) = self {
-            expr.terms()
+        if let Term::Expr(items) = self {
+            items.terms()
         } else {
             1
         }
