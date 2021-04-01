@@ -261,8 +261,10 @@ pub struct ExprCall {
 
 impl fmt::Display for ExprCall {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[cfg(feature = "debug")]
+        write!(f, "{{")?;
         match &self.chained {
-            Some(sep) => {
+            Some(sep) if !cfg!(feature = "dechain") => {
                 let prev = self.args[0].to_string();
                 write!(
                     f,
@@ -276,9 +278,9 @@ impl fmt::Display for ExprCall {
                         .map(ToString::to_string)
                         .intersperse(" ".into())
                         .collect::<String>()
-                )
+                )?;
             }
-            None => {
+            _ => {
                 write!(
                     f,
                     "{}{}{}",
@@ -289,9 +291,12 @@ impl fmt::Display for ExprCall {
                         .map(ToString::to_string)
                         .intersperse(" ".into())
                         .collect::<String>()
-                )
+                )?;
             }
         }
+        #[cfg(feature = "debug")]
+        write!(f, "}}")?;
+        Ok(())
     }
 }
 

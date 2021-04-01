@@ -18,3 +18,4 @@ tokenate.path = '../tokenate'
 
 [features]
 debug = []
+dechain = []
