@@ -45,7 +45,7 @@ bool_literal = { "true" | "false" }
 nil = { "nil" }
 fat_arrow = { "=>" }
 param = { ident }
-closure = { (param+ | "()") ~ fat_arrow ~ expr_list}
+closure = { (param+ | "()") ~ fat_arrow ~ items}
 term = { real | int | nat | bool_literal | nil | string | closure | ident | paren_expr }
 expr_call_single = { term+ }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
@@ -56,7 +56,6 @@ expr_cmp = { expr_as ~ (op_comp ~ expr_as)* }
 expr_and = { expr_cmp ~ (op_and ~ expr_cmp)* }
 expr_or = { expr_and ~ (op_or ~ expr_and)* }
 expr = { expr_or }
-expr_list = { (expr ~ sep_expr*)+ }
 
 // Items
 equals = { "=" }
