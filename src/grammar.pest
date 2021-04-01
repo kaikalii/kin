@@ -1,9 +1,9 @@
 horiz_ws = _{ " " | "\t" | "\r" }
 WHITESPACE = _{ horiz_ws }
 ws = _{ WHITESPACE | "\n" }
-// single_line_comment = @{ "#" ~ (!"\n" ~ ANY)* ~ &"\n" }
-// multi_line_comment = @{ "#/" ~ (!"/#" ~ ANY)* ~ "/#" }
-COMMENT = _{ "#" ~ (!"\n" ~ ANY)* ~ &"\n" }
+single_line_comment = @{ "#" ~ (!"\n" ~ ANY)* ~ &"\n" }
+multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ "'''" }
+COMMENT = _{ multi_line_comment | single_line_comment }
 
 chain_call = { "," ~ horiz_ws* ~ "\n"? }
 sep_expr = _{ ";" | "\n" }
