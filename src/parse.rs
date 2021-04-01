@@ -38,7 +38,7 @@ pub fn parse(input: &str) -> ParseResult<Items> {
                 let extra = input[parsed_len..].split_whitespace().next().unwrap();
                 return Err(PestError::new_from_span(
                     ErrorVariant::CustomError {
-                        message: format!("Invalid token: {}", extra),
+                        message: format!("Invalid syntax: {}", extra),
                     },
                     Span::new(input, parsed_len, parsed_len + extra.len()).unwrap(),
                 ));
@@ -300,8 +300,8 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
         Rule::ident => Term::Ident(pair.as_str().into()),
         Rule::paren_expr => {
             let pair = only(pair);
-            let expr = parse_expr(pair)?;
-            Term::wrapping(Items::wrapping(Item::wrapping(expr)))
+            let items = parse_items(pair)?;
+            Term::wrapping(items)
         }
         Rule::string => {
             let string = parse_string_literal(pair);
