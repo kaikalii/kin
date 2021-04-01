@@ -23,7 +23,7 @@ where
 struct NootParser;
 
 pub fn parse(input: &str) -> ParseResult<Items> {
-    match NootParser::parse(Rule::items, &input) {
+    match NootParser::parse(Rule::file, &input) {
         Ok(mut pairs) => {
             let pair = pairs.next().unwrap();
             let parsed_len = pair.as_str().len();
@@ -55,9 +55,18 @@ fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
     println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let pair = only(pair);
     Ok(match pair.as_rule() {
-        Rule::expr_list => Item::Expressions(parse_exprs(pair)?),
+        Rule::expr => Item::Expression(parse_expr(pair)?),
+        Rule::assignment => Item::Assignment(parse_assignment(pair)?),
         rule => unreachable!("{:?}", rule),
     })
+}
+
+fn parse_assignment(pair: Pair<Rule>) -> ParseResult<Assignment> {
+    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    let mut pairs = pair.into_inner();
+    let ident = pairs.next().unwrap().as_str().to_owned();
+    let expr = parse_expr(pairs.next().unwrap())?;
+    Ok(Assignment { ident, expr })
 }
 
 fn parse_exprs(pair: Pair<Rule>) -> ParseResult<Expressions> {
@@ -246,9 +255,9 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
     for mut chained_call in calls {
         chained_call.args.insert(
             0,
-            Term::wrapping(Items::wrapping(Item::wrapping(Expressions::wrapping(
-                ExprOr::wrapping(ExprAnd::wrapping(ExprCmp::wrapping(ExprAS::wrapping(
-                    ExprMDR::wrapping(ExprNot::wrapping(call)),
+            Term::wrapping(Items::wrapping(Item::wrapping(ExprOr::wrapping(
+                ExprAnd::wrapping(ExprCmp::wrapping(ExprAS::wrapping(ExprMDR::wrapping(
+                    ExprNot::wrapping(call),
                 )))),
             )))),
         );
@@ -270,7 +279,7 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
         Rule::paren_expr => {
             let pair = only(pair);
             let expr = parse_expr(pair)?;
-            Term::wrapping(Items::wrapping(Item::wrapping(Expressions::wrapping(expr))))
+            Term::wrapping(Items::wrapping(Item::wrapping(expr)))
         }
         Rule::string => {
             let string = parse_string_literal(pair);

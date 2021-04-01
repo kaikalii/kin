@@ -9,20 +9,24 @@ use itertools::Itertools;
 #[derive(Debug, Display, Clone, PartialEq)]
 pub enum Item {
     FunctionDecl(FunctionDecl),
-    Expressions(Expressions),
+    Expression(Expression),
     Assignment(Assignment),
 }
 
 impl Node for Item {
-    type Child = Expressions;
+    type Child = Expression;
     fn contains_ident(&self, ident: &str) -> bool {
-        todo!()
+        match self {
+            Item::FunctionDecl(decl) => decl.function.contains_ident(ident),
+            Item::Expression(expr) => expr.contains_ident(ident),
+            Item::Assignment(assignment) => assignment.expr.contains_ident(ident),
+        }
     }
     fn terms(&self) -> usize {
         todo!()
     }
     fn wrapping(child: Self::Child) -> Self {
-        Item::Expressions(child)
+        Item::Expression(child)
     }
 }
 

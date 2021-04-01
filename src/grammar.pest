@@ -1,5 +1,6 @@
 horiz_ws = _{ " " | "\t" | "\r" }
 WHITESPACE = _{ horiz_ws }
+ws = _{ WHITESPACE | "\n" }
 // single_line_comment = @{ "#" ~ (!"\n" ~ ANY)* ~ &"\n" }
 // multi_line_comment = @{ "#/" ~ (!"/#" ~ ANY)* ~ "/#" }
 COMMENT = _{ "#" ~ (!"\n" ~ ANY)* ~ &"\n" }
@@ -57,6 +58,8 @@ expr = { expr_or }
 expr_list = { (expr ~ sep_expr*)+ }
 
 // Items
-item = { expr_list }
-items = { item+ }
-file = { item* }
+assignment = { ident ~ "=" ~ expr }
+item = { assignment | expr }
+item_and_sep = _{ item ~ sep_expr* }
+items = { ws* ~ item_and_sep+ }
+file = { ws* ~ item_and_sep* }
