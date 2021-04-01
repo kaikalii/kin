@@ -91,28 +91,6 @@ fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
     })
 }
 
-fn parse_exprs(pair: Pair<Rule>) -> ParseResult<Expressions> {
-    debug_pair!(pair);
-    parse_exprs_impl(pair.into_inner())
-}
-
-fn parse_exprs_impl<'a, P>(pairs: P) -> ParseResult<Expressions>
-where
-    P: Iterator<Item = Pair<'a, Rule>>,
-{
-    let mut exprs = Vec::new();
-    for pair in pairs {
-        match pair.as_rule() {
-            Rule::expr => {
-                let expr = parse_expr(pair)?;
-                exprs.push(expr);
-            }
-            rule => unreachable!("{:?}", rule),
-        }
-    }
-    Ok(Expressions { exprs })
-}
-
 fn parse_expr(pair: Pair<Rule>) -> ParseResult<Expression> {
     debug_pair!(pair);
     let pair = only(pair);
@@ -320,7 +298,7 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
                     break;
                 }
             }
-            let body = parse_exprs(pairs.next().unwrap())?;
+            let body = parse_items(pairs.next().unwrap())?;
             Term::Closure(
                 Closure {
                     params: Params { params },

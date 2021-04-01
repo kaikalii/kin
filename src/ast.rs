@@ -51,29 +51,6 @@ impl Node for Items {
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]
-#[display(
-    fmt = "{}",
-    // r#"exprs.iter().map(|expr| format!("{{{}}}", expr)).intersperse("\n".into()).collect::<String>()"#
-    r#"exprs.iter().map(|e| e.to_string()).intersperse("\n\n".into()).collect::<String>()"#
-)]
-pub struct Expressions {
-    pub exprs: Vec<Expression>,
-}
-
-impl Node for Expressions {
-    type Child = Expression;
-    fn contains_ident(&self, ident: &str) -> bool {
-        self.exprs.iter().any(|expr| expr.contains_ident(ident))
-    }
-    fn terms(&self) -> usize {
-        self.exprs.iter().map(Expression::terms).sum()
-    }
-    fn wrapping(child: Self::Child) -> Self {
-        Expressions { exprs: vec![child] }
-    }
-}
-
-#[derive(Debug, Display, Clone, PartialEq)]
 #[display(fmt = "{}", ident)]
 pub struct Param {
     pub ident: String,
@@ -351,15 +328,15 @@ impl Node for Term {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Closure {
     pub params: Params,
-    pub body: Expressions,
+    pub body: Items,
 }
 
 impl Closure {
     fn contains_ident(&self, ident: &str) -> bool {
         self.body
-            .exprs
+            .items
             .iter()
-            .any(|expr| expr.contains_ident(ident))
+            .any(|items| items.contains_ident(ident))
     }
 }
 

@@ -10,7 +10,6 @@ fn main() {
     match parse::parse(&input) {
         Ok(items) => {
             println!();
-            // println!("{:#?}", items);
             println!("{}", items);
         }
         Err(e) => println!("{}", e),
