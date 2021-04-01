@@ -1,12 +1,15 @@
 horiz_ws = _{ " " | "\t" | "\r" }
 WHITESPACE = _{ horiz_ws }
-ws = _{ WHITESPACE | "\n" }
-single_line_comment = @{ "#" ~ (!"\n" ~ ANY)* ~ &"\n" }
+ws = _{ WHITESPACE | NEWLINE }
+single_line_comment = @{ "#" ~ (!NEWLINE ~ ANY)* ~ &NEWLINE }
 multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ "'''" }
 COMMENT = _{ multi_line_comment | single_line_comment }
 
-chain_call = { "," ~ horiz_ws* ~ "\n"? }
-sep_expr = _{ ";" | "\n" }
+chain_call = { "," ~ horiz_ws* ~ NEWLINE? }
+sep_expr = _{ ";" | NEWLINE }
+
+indent = _{ "    " | "\t" }
+indents = _{ indent* }
 
 keyword = { "true" | "false" | "is" | "isnt" | "and" | "or" }
 
@@ -59,8 +62,9 @@ expr = { expr_or }
 
 // Items
 equals = { "=" }
-def = { ident ~ param* ~ equals ~ expr }
+block = { NEWLINE ~ PUSH }
+def = { ident ~ param* ~ equals ~ NEWLINE? ~ items }
 item = { def | expr }
 item_and_sep = _{ item ~ sep_expr* }
-items = { ws* ~ item_and_sep+ }
-file = { ws* ~ item_and_sep* }
+items = { item_and_sep+ }
+file = { SOI ~ item_and_sep* ~ EOI }

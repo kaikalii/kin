@@ -83,11 +83,11 @@ fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
             break;
         }
     }
-    let expr = parse_expr(pairs.next().unwrap())?;
+    let items = parse_items(pairs.next().unwrap())?;
     Ok(Def {
         ident,
         params: Params { params },
-        expr,
+        items,
     })
 }
 

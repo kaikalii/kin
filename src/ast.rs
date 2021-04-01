@@ -17,7 +17,7 @@ impl Node for Item {
     fn contains_ident(&self, ident: &str) -> bool {
         match self {
             Item::Expression(expr) => expr.contains_ident(ident),
-            Item::Def(def) => def.expr.contains_ident(ident),
+            Item::Def(def) => def.items.contains_ident(ident),
         }
     }
     fn terms(&self) -> usize {
@@ -65,12 +65,25 @@ pub struct Params {
     pub params: Vec<Param>,
 }
 
-#[derive(Debug, Display, Clone, PartialEq)]
-#[display(fmt = "{} {} = {}", "ident.bright_white()", params, expr)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Def {
     pub ident: String,
     pub params: Params,
-    pub expr: Expression,
+    pub items: Items,
+}
+
+impl fmt::Display for Def {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {} = ", self.ident, self.params)?;
+        if self.items.items.len() == 1 {
+            write!(f, "{}", self.items.items[0])?;
+        } else {
+            for item in &self.items.items {
+                write!(f, "\n\t{}", item)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Display, Clone, PartialEq, Eq)]
