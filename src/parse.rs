@@ -14,7 +14,7 @@ pub type ParseResult<T> = Result<T, PestError<Rule>>;
 macro_rules! debug_pair {
     ($pair:expr) => {
         #[cfg(feature = "debug")]
-        println!("{:?} {:?}", $pair.as_rule(), $pair.as_str());
+        println!("{:?}: {}", $pair.as_rule(), $pair.as_str());
     };
 }
 
@@ -53,7 +53,11 @@ fn parse_items(pair: Pair<Rule>) -> ParseResult<Items> {
     debug_pair!(pair);
     let mut items = Vec::new();
     for pair in pair.into_inner() {
-        items.push(parse_item(pair)?);
+        match pair.as_rule() {
+            Rule::item => items.push(parse_item(pair)?),
+            Rule::EOI => {}
+            rule => unreachable!("{:?}", rule),
+        }
     }
     Ok(Items { items })
 }
@@ -83,7 +87,12 @@ fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
             break;
         }
     }
-    let items = parse_items(pairs.next().unwrap())?;
+    let pair = pairs.next().unwrap();
+    let items = match pair.as_rule() {
+        Rule::items => parse_items(pair)?,
+        Rule::expr => Items::wrapping(Item::wrapping(parse_expr(pair)?)),
+        rule => unreachable!("{:?}", rule),
+    };
     Ok(Def {
         ident,
         params: Params { params },

@@ -6,10 +6,7 @@ multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ "'''" }
 COMMENT = _{ multi_line_comment | single_line_comment }
 
 chain_call = { "," ~ horiz_ws* ~ NEWLINE? }
-sep_expr = _{ ";" | NEWLINE }
-
-indent = _{ "    " | "\t" }
-indents = _{ indent* }
+sep = _{ NEWLINE }
 
 keyword = { "true" | "false" | "is" | "isnt" | "and" | "or" }
 
@@ -46,9 +43,9 @@ op_not = { "not" }
 paren_expr = { "(" ~ items ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
-fat_arrow = { "=>" }
+bar = { "|" }
 param = { ident }
-closure = { (param+ | "()") ~ fat_arrow ~ items}
+closure = { param* ~ bar ~ items}
 term = { real | int | nat | bool_literal | nil | string | closure | ident | paren_expr }
 expr_call_single = { term+ }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
@@ -61,10 +58,11 @@ expr_or = { expr_and ~ (op_or ~ expr_and)* }
 expr = { expr_or }
 
 // Items
+nl_or_end = _{ NEWLINE | &EOI }
 equals = { "=" }
-block = { NEWLINE ~ PUSH }
-def = { ident ~ param* ~ equals ~ NEWLINE? ~ items }
-item = { def | expr }
-item_and_sep = _{ item ~ sep_expr* }
-items = { item_and_sep+ }
-file = { SOI ~ item_and_sep* ~ EOI }
+def_body_long = _{ NEWLINE ~ items ~ nl_or_end }
+def_body = _{ def_body_long | (expr ~ nl_or_end) }
+def = { ident ~ param* ~ equals ~ def_body }
+item = { def | (expr ~ nl_or_end) }
+items = { item+ }
+file = { ws* ~ item* ~ ws* ~ EOI }

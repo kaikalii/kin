@@ -74,25 +74,28 @@ pub struct Def {
 
 impl fmt::Display for Def {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {} = ", self.ident, self.params)?;
+        write!(
+            f,
+            "{}{} = ",
+            self.ident,
+            if self.params.params.is_empty() {
+                "".into()
+            } else {
+                format!(" {}", self.params)
+            }
+        )?;
         if self.items.items.len() == 1 {
             write!(f, "{}", self.items.items[0])?;
         } else {
             for item in &self.items.items {
-                write!(f, "\n\t{}", item)?;
+                write!(f, "\n    {}", item)?;
             }
         }
         Ok(())
     }
 }
 
-#[derive(Debug, Display, Clone, PartialEq, Eq)]
-#[display(bound = "O: fmt::Display, T: fmt::Display")]
-#[display(
-    fmt = "{}{}",
-    "left",
-    r#"rights.iter().map(|r| { format!(" {} {}", r.op, r.expr) }).collect::<String>()"#
-)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinExpr<O, T> {
     pub left: Box<T>,
     pub rights: Vec<Right<O, T>>,
@@ -104,6 +107,20 @@ impl<O, T> BinExpr<O, T> {
             left: Box::new(left),
             rights,
         }
+    }
+}
+
+impl<O, T> fmt::Display for BinExpr<O, T>
+where
+    O: fmt::Display,
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.left)?;
+        for right in &self.rights {
+            write!(f, " {} {}", right.op, right.expr)?;
+        }
+        Ok(())
     }
 }
 
@@ -355,6 +372,6 @@ impl Closure {
 
 impl fmt::Display for Closure {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} => {}", self.params, self.body)
+        write!(f, "{} | {}", self.params, self.body)
     }
 }
