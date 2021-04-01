@@ -8,18 +8,16 @@ use itertools::Itertools;
 
 #[derive(Debug, Display, Clone, PartialEq)]
 pub enum Item {
-    FunctionDecl(FunctionDecl),
     Expression(Expression),
-    Assignment(Assignment),
+    Def(Def),
 }
 
 impl Node for Item {
     type Child = Expression;
     fn contains_ident(&self, ident: &str) -> bool {
         match self {
-            Item::FunctionDecl(decl) => decl.function.contains_ident(ident),
             Item::Expression(expr) => expr.contains_ident(ident),
-            Item::Assignment(assignment) => assignment.expr.contains_ident(ident),
+            Item::Def(def) => def.expr.contains_ident(ident),
         }
     }
     fn terms(&self) -> usize {
@@ -76,41 +74,26 @@ impl Node for Expressions {
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]
-#[display(fmt = "{} = {}", "ident.bright_white()", expr)]
-pub struct Assignment {
+#[display(fmt = "{}", ident)]
+pub struct Param {
     pub ident: String,
-    pub expr: Expression,
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]
 #[display(
-    fmt = "{} {}({}) {}",
-    r#""fn".magenta()"#,
-    "ident.bright_white()",
-    "function.params",
-    "function.body"
+    fmt = "{}",
+    r#"params.iter().map(ToString::to_string).intersperse(" ".into()).collect::<String>()"#
 )]
-pub struct FunctionDecl {
-    pub ident: String,
-    pub function: Function,
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Params {
-    pub idents: Vec<String>,
+    pub params: Vec<Param>,
 }
 
-impl fmt::Display for Params {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.idents.is_empty() {
-            write!(f, "()")
-        } else {
-            for s in self.idents.iter().map(AsRef::as_ref).intersperse(", ") {
-                write!(f, "{}", s)?;
-            }
-            Ok(())
-        }
-    }
+#[derive(Debug, Display, Clone, PartialEq)]
+#[display(fmt = "{} {} = {}", "ident.bright_white()", params, expr)]
+pub struct Def {
+    pub ident: String,
+    pub params: Params,
+    pub expr: Expression,
 }
 
 #[derive(Debug, Display, Clone, PartialEq, Eq)]
@@ -338,7 +321,7 @@ pub enum Term {
     Bool(bool),
     #[display(fmt = "{}", "format!(\"{:?}\", _0).yellow()")]
     String(String),
-    Function(Box<Function>),
+    Closure(Box<Closure>),
     #[display(fmt = "{}", "\"nil\".blue()")]
     Nil,
 }
@@ -349,7 +332,7 @@ impl Node for Term {
         match self {
             Term::Expr(items) => items.contains_ident(ident),
             Term::Ident(p) => p == ident,
-            Term::Function(f) => f.contains_ident(ident),
+            Term::Closure(f) => f.contains_ident(ident),
             _ => false,
         }
     }
@@ -366,23 +349,21 @@ impl Node for Term {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Function {
+pub struct Closure {
     pub params: Params,
     pub body: Expressions,
 }
 
-impl Function {
+impl Closure {
     fn contains_ident(&self, ident: &str) -> bool {
-        self.params.idents.iter().any(|arg| arg == ident)
-            || self
-                .body
-                .exprs
-                .iter()
-                .any(|expr| expr.contains_ident(ident))
+        self.body
+            .exprs
+            .iter()
+            .any(|expr| expr.contains_ident(ident))
     }
 }
 
-impl fmt::Display for Function {
+impl fmt::Display for Closure {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} => {}", self.params, self.body)
     }

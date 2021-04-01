@@ -44,8 +44,9 @@ paren_expr = { "(" ~ items ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
 fat_arrow = { "=>" }
-inline_function = { (ident+ | "()") ~ fat_arrow ~ expr_list}
-term = { real | int | nat | bool_literal | nil | string | inline_function | ident | paren_expr }
+param = { ident }
+closure = { (param+ | "()") ~ fat_arrow ~ expr_list}
+term = { real | int | nat | bool_literal | nil | string | closure | ident | paren_expr }
 expr_call_single = { term+ }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
 expr_not = { op_not? ~ expr_call }
@@ -58,8 +59,9 @@ expr = { expr_or }
 expr_list = { (expr ~ sep_expr*)+ }
 
 // Items
-assignment = { ident ~ "=" ~ expr }
-item = { assignment | expr }
+equals = { "=" }
+def = { ident ~ param* ~ equals ~ expr }
+item = { def | expr }
 item_and_sep = _{ item ~ sep_expr* }
 items = { ws* ~ item_and_sep+ }
 file = { ws* ~ item_and_sep* }

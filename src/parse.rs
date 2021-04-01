@@ -56,17 +56,32 @@ fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
     let pair = only(pair);
     Ok(match pair.as_rule() {
         Rule::expr => Item::Expression(parse_expr(pair)?),
-        Rule::assignment => Item::Assignment(parse_assignment(pair)?),
+        Rule::def => Item::Def(parse_def(pair)?),
         rule => unreachable!("{:?}", rule),
     })
 }
 
-fn parse_assignment(pair: Pair<Rule>) -> ParseResult<Assignment> {
+fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
     println!("{:?} {:?}", pair.as_rule(), pair.as_str());
     let mut pairs = pair.into_inner();
     let ident = pairs.next().unwrap().as_str().to_owned();
+    let mut params = Vec::new();
+    for pair in pairs.by_ref() {
+        if let Rule::param = pair.as_rule() {
+            let mut pairs = pair.into_inner();
+            let ident = pairs.next().unwrap().as_str().to_owned();
+            let param = Param { ident };
+            params.push(param);
+        } else {
+            break;
+        }
+    }
     let expr = parse_expr(pairs.next().unwrap())?;
-    Ok(Assignment { ident, expr })
+    Ok(Def {
+        ident,
+        params: Params { params },
+        expr,
+    })
 }
 
 fn parse_exprs(pair: Pair<Rule>) -> ParseResult<Expressions> {
@@ -285,20 +300,23 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
             let string = parse_string_literal(pair);
             Term::String(string)
         }
-        Rule::inline_function => {
+        Rule::closure => {
             let mut pairs = pair.into_inner();
-            let mut idents = Vec::new();
-            while let Some(ident_pair) = pairs.next() {
-                if ident_pair.as_rule() == Rule::ident {
-                    idents.push(ident_pair.as_str().to_owned());
+            let mut params = Vec::new();
+            for pair in pairs.by_ref() {
+                if let Rule::param = pair.as_rule() {
+                    let mut pairs = pair.into_inner();
+                    let ident = pairs.next().unwrap().as_str().to_owned();
+                    let param = Param { ident };
+                    params.push(param);
                 } else {
                     break;
                 }
             }
             let body = parse_exprs(pairs.next().unwrap())?;
-            Term::Function(
-                Function {
-                    params: Params { idents },
+            Term::Closure(
+                Closure {
+                    params: Params { params },
                     body,
                 }
                 .into(),
