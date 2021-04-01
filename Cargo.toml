@@ -15,3 +15,6 @@ pest = '2'
 pest_derive = '2'
 rand = '0.8'
 tokenate.path = '../tokenate'
+
+[features]
+debug = []

@@ -11,6 +11,13 @@ use crate::ast::*;
 
 pub type ParseResult<T> = Result<T, PestError<Rule>>;
 
+macro_rules! debug_pair {
+    ($pair:expr) => {
+        #[cfg(feature = "debug")]
+        println!("{:?} {:?}", $pair.as_rule(), $pair.as_str());
+    };
+}
+
 fn only<R>(pair: Pair<R>) -> Pair<R>
 where
     R: RuleType,
@@ -43,7 +50,7 @@ pub fn parse(input: &str) -> ParseResult<Items> {
 }
 
 fn parse_items(pair: Pair<Rule>) -> ParseResult<Items> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let mut items = Vec::new();
     for pair in pair.into_inner() {
         items.push(parse_item(pair)?);
@@ -52,7 +59,7 @@ fn parse_items(pair: Pair<Rule>) -> ParseResult<Items> {
 }
 
 fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let pair = only(pair);
     Ok(match pair.as_rule() {
         Rule::expr => Item::Expression(parse_expr(pair)?),
@@ -62,7 +69,7 @@ fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
 }
 
 fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let ident = pairs.next().unwrap().as_str().to_owned();
     let mut params = Vec::new();
@@ -85,7 +92,7 @@ fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
 }
 
 fn parse_exprs(pair: Pair<Rule>) -> ParseResult<Expressions> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     parse_exprs_impl(pair.into_inner())
 }
 
@@ -107,7 +114,7 @@ where
 }
 
 fn parse_expr(pair: Pair<Rule>) -> ParseResult<Expression> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let pair = only(pair);
     Ok(match pair.as_rule() {
         Rule::expr_or => parse_expr_or(pair)?,
@@ -116,7 +123,7 @@ fn parse_expr(pair: Pair<Rule>) -> ParseResult<Expression> {
 }
 
 fn parse_expr_or(pair: Pair<Rule>) -> ParseResult<ExprOr> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_and(left)?;
@@ -136,7 +143,7 @@ fn parse_expr_or(pair: Pair<Rule>) -> ParseResult<ExprOr> {
 }
 
 fn parse_expr_and(pair: Pair<Rule>) -> ParseResult<ExprAnd> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_cmp(left)?;
@@ -156,7 +163,7 @@ fn parse_expr_and(pair: Pair<Rule>) -> ParseResult<ExprAnd> {
 }
 
 fn parse_expr_cmp(pair: Pair<Rule>) -> ParseResult<ExprCmp> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_as(left)?;
@@ -181,7 +188,7 @@ fn parse_expr_cmp(pair: Pair<Rule>) -> ParseResult<ExprCmp> {
 }
 
 fn parse_expr_as(pair: Pair<Rule>) -> ParseResult<ExprAS> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_mdr(left)?;
@@ -202,7 +209,7 @@ fn parse_expr_as(pair: Pair<Rule>) -> ParseResult<ExprAS> {
 }
 
 fn parse_expr_mdr(pair: Pair<Rule>) -> ParseResult<ExprMDR> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
     let left = parse_expr_not(left)?;
@@ -224,7 +231,7 @@ fn parse_expr_mdr(pair: Pair<Rule>) -> ParseResult<ExprMDR> {
 }
 
 fn parse_expr_not(pair: Pair<Rule>) -> ParseResult<ExprNot> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let first = pairs.next().unwrap();
     let op = match first.as_str() {
@@ -241,7 +248,7 @@ fn parse_expr_not(pair: Pair<Rule>) -> ParseResult<ExprNot> {
 }
 
 fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let pairs = pair.into_inner();
     let mut calls = Vec::new();
     let mut chained = None;
@@ -282,7 +289,7 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
 }
 
 fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let pair = only(pair);
     Ok(match pair.as_rule() {
         Rule::nat => Term::Nat(pair.as_str().parse().unwrap()),
@@ -327,7 +334,7 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
 }
 
 fn parse_string_literal(pair: Pair<Rule>) -> std::string::String {
-    println!("{:?} {:?}", pair.as_rule(), pair.as_str());
+    debug_pair!(pair);
     let mut s = String::new();
     for pair in pair.into_inner() {
         match pair.as_rule() {
