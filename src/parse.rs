@@ -271,8 +271,9 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
                 PestError::new_from_span(
                     ErrorVariant::CustomError {
                         message: format!(
-                            concat!("Invalid ", stringify!($term), " literal \"{}\""),
-                            pair.as_str()
+                            "Invalid {:?} literal \"{}\"",
+                            pair.as_rule(),
+                            pair.as_str(),
                         ),
                     },
                     pair.as_span(),

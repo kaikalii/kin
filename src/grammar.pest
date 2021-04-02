@@ -4,9 +4,7 @@ ws = _{ WHITESPACE | NEWLINE }
 single_line_comment = @{ "#" ~ (!NEWLINE ~ ANY)* ~ &NEWLINE }
 multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ "'''" }
 COMMENT = _{ multi_line_comment | single_line_comment }
-
-
-keyword = { "true" | "false" | "is" | "isnt" | "and" | "or" | "end" }
+keyword = { "true" | "false" | "is" | "and" | "or" | "end" }
 
 // Numbers
 nat = @{ ASCII_DIGIT+ }
@@ -52,6 +50,7 @@ expr_not = { op_not? ~ expr_call }
 expr_mdr = { expr_not ~ (op_mdr ~ expr_not)* }
 expr_as = { expr_mdr ~ (op_as ~ expr_mdr)* }
 expr_cmp = { expr_as ~ (op_comp ~ expr_as)* }
+expr_is = { expr_is ~ ("is" ~ )* }
 expr_and = { expr_cmp ~ (NEWLINE? ~ op_and ~ NEWLINE? ~ expr_cmp)* }
 expr_or = { expr_and ~ (NEWLINE? ~ op_or ~ NEWLINE? ~ expr_and)* }
 expr = { expr_or }
@@ -61,4 +60,4 @@ equals = { "=" }
 def = { ident ~ param* ~ equals ~ (NEWLINE ~ items ~ "end" | expr) }
 item = { def | expr }
 items = { (item ~ NEWLINE*)+ }
-file = { ws* ~ items? ~ EOI }
+file = { SOI ~ ws* ~ items? ~ EOI }
