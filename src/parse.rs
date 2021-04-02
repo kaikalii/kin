@@ -59,18 +59,21 @@ fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
     })
 }
 
-fn parse_type_list(pair: Pair<Rule>) -> TypeList {
+fn parse_type_list(pair: Pair<Rule>) -> TypePair {
     let mut variants = Vec::new();
     for pair in pair.into_inner() {
         match pair.as_rule() {
             Rule::type_variant => {
                 let ident = pair.as_str().to_owned();
-                variants.push(TypeVariant { ident });
+                variants.push(UnresolvedType { ident });
             }
             rule => unreachable!("{:?}", rule),
         }
     }
-    TypeList { variants }
+    TypePair {
+        unresolved: variants,
+        resolved: None,
+    }
 }
 
 fn parse_param(pair: Pair<Rule>) -> Param {
