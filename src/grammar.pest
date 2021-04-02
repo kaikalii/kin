@@ -58,11 +58,10 @@ expr_or = { expr_and ~ (NEWLINE? ~ op_or ~ NEWLINE? ~ expr_and)* }
 expr = { expr_or }
 
 // Items
-nl_or_end = _{ NEWLINE? }
 equals = { "=" }
-def_body_long = _{ NEWLINE ~ items ~ nl_or_end }
-def_body = _{ def_body_long | (expr ~ nl_or_end) }
+def_body_long = _{ NEWLINE ~ items ~ NEWLINE? }
+def_body = _{ def_body_long | (expr ~ NEWLINE*) }
 def = { ident ~ param* ~ equals ~ def_body }
-item = { def | (expr ~ nl_or_end) }
+item = { def | (expr ~ NEWLINE?) }
 items = { item+ }
 file = { ws* ~ item* ~ ws* ~ EOI }
