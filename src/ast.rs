@@ -77,22 +77,21 @@ pub struct Params {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Def {
     pub ident: String,
+    pub ret: TypeList,
     pub params: Params,
     pub items: Items,
 }
 
 impl fmt::Display for Def {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}{} = ",
-            self.ident,
-            if self.params.params.is_empty() {
-                "".into()
-            } else {
-                format!(" {}", self.params)
-            }
-        )?;
+        write!(f, "{}", self.ident)?;
+        if !self.ret.variants.is_empty() {
+            write!(f, ":{}", self.ret)?;
+        }
+        if !self.params.params.is_empty() {
+            write!(f, " {}", self.params)?;
+        }
+        write!(f, " = ")?;
         if self.items.items.len() == 1 {
             write!(f, "{}", self.items.items[0])?;
         } else {

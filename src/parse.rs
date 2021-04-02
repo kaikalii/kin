@@ -83,7 +83,7 @@ fn parse_param(pair: Pair<Rule>) -> Param {
 fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
-    let ident = pairs.next().unwrap().as_str().to_owned();
+    let Param { ident, types: ret } = parse_param(pairs.next().unwrap());
     let mut params = Vec::new();
     for pair in pairs.by_ref() {
         if let Rule::param = pair.as_rule() {
@@ -100,6 +100,7 @@ fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
     };
     Ok(Def {
         ident,
+        ret,
         params: Params { params },
         items,
     })

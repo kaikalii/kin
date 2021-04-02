@@ -23,7 +23,7 @@ escape     = @{ "\\" ~ (predefined | byte | unicode) }
 
 // Idents
 ident_inner = @{ LETTER ~ ("_"* ~ (LETTER | DECIMAL_NUMBER | OTHER_NUMBER)+)* }
-ident = { !keyword ~ ident_inner }
+ident = { !keyword ~ ident_inner | "_" }
 
 // Types
 type_variant = { ident | nil }
@@ -59,7 +59,7 @@ expr = { expr_or }
 
 // Items
 equals = { "=" }
-def = { ident ~ param* ~ equals ~ (NEWLINE ~ items ~ "end" | expr) }
+def = { param+ ~ equals ~ (NEWLINE ~ items ~ "end" | expr) }
 item = { def | expr }
 items = { (item ~ NEWLINE*)+ }
 file = { SOI ~ ws* ~ items? ~ EOI }
