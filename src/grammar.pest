@@ -5,10 +5,8 @@ single_line_comment = @{ "#" ~ (!NEWLINE ~ ANY)* ~ &NEWLINE }
 multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ "'''" }
 COMMENT = _{ multi_line_comment | single_line_comment }
 
-chain_call = { "," ~ horiz_ws* ~ NEWLINE? }
-sep = _{ NEWLINE }
 
-keyword = { "true" | "false" | "is" | "isnt" | "and" | "or" }
+keyword = { "true" | "false" | "is" | "isnt" | "and" | "or" | "end" }
 
 // Numbers
 nat = @{ ASCII_DIGIT+ }
@@ -34,7 +32,7 @@ ident = { !keyword ~ ident_inner }
 // Operators
 op_as = { "+" | "-" }
 op_mdr = { "*" | "/" | "%" }
-op_comp = { "is" | "isnt" | "<=" | ">=" | "<" | ">" }
+op_comp = { "is" | "<=" | ">=" | "<" | ">" }
 op_and = { "and" }
 op_or = { "or" }
 op_not = { "not" }
@@ -48,6 +46,7 @@ param = { ident }
 closure = { param* ~ bar ~ items}
 term = { real | int | nat | bool_literal | nil | string | closure | ident | paren_expr }
 expr_call_single = { term+ }
+chain_call = { "," ~ horiz_ws* ~ NEWLINE? }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
 expr_not = { op_not? ~ expr_call }
 expr_mdr = { expr_not ~ (op_mdr ~ expr_not)* }
@@ -59,9 +58,7 @@ expr = { expr_or }
 
 // Items
 equals = { "=" }
-def_body_long = _{ NEWLINE ~ items ~ NEWLINE* }
-def_body = _{ def_body_long | (expr ~ NEWLINE*) }
-def = { ident ~ param* ~ equals ~ def_body }
-item = { def | (expr ~ NEWLINE*) }
-items = { item+ }
-file = { ws* ~ item* ~ ws* ~ EOI }
+def = { ident ~ param* ~ equals ~ (NEWLINE ~ items ~ "end" | expr) }
+item = { def | expr }
+items = { (item ~ NEWLINE*)+ }
+file = { ws* ~ items? ~ EOI }

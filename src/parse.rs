@@ -4,7 +4,7 @@ use itertools::Itertools;
 use pest::{
     error::{Error as PestError, ErrorVariant},
     iterators::Pair,
-    Parser, RuleType, Span,
+    Parser, RuleType,
 };
 
 use crate::ast::*;
@@ -31,20 +31,7 @@ struct NootParser;
 
 pub fn parse(input: &str) -> ParseResult<Items> {
     match NootParser::parse(Rule::file, &input) {
-        Ok(mut pairs) => {
-            let pair = pairs.next().unwrap();
-            let parsed_len = pair.as_str().len();
-            if parsed_len < input.len() {
-                let extra = input[parsed_len..].split_whitespace().next().unwrap();
-                return Err(PestError::new_from_span(
-                    ErrorVariant::CustomError {
-                        message: format!("Invalid syntax: {}", extra),
-                    },
-                    Span::new(input, parsed_len, parsed_len + extra.len()).unwrap(),
-                ));
-            }
-            parse_items(pair)
-        }
+        Ok(mut pairs) => parse_items(only(pairs.next().unwrap())),
         Err(e) => Err(e),
     }
 }
@@ -278,10 +265,25 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
 fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
     debug_pair!(pair);
     let pair = only(pair);
+    macro_rules! number_literal {
+        ($term:ident) => {
+            pair.as_str().parse().map(Term::$term).map_err(|_| {
+                PestError::new_from_span(
+                    ErrorVariant::CustomError {
+                        message: format!(
+                            concat!("Invalid ", stringify!($term), " literal \"{}\""),
+                            pair.as_str()
+                        ),
+                    },
+                    pair.as_span(),
+                )
+            })
+        };
+    }
     Ok(match pair.as_rule() {
-        Rule::nat => Term::Nat(pair.as_str().parse().unwrap()),
-        Rule::int => Term::Int(pair.as_str().parse().unwrap()),
-        Rule::real => Term::Real(pair.as_str().parse().unwrap()),
+        Rule::nat => number_literal!(Nat)?,
+        Rule::int => number_literal!(Int)?,
+        Rule::real => number_literal!(Real)?,
         Rule::nil => Term::Nil,
         Rule::bool_literal => Term::Bool(pair.as_str() == "true"),
         Rule::ident => Term::Ident(pair.as_str().into()),
