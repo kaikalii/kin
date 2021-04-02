@@ -14,15 +14,6 @@ pub enum Item {
 
 impl Node for Item {
     type Child = Expression;
-    fn contains_ident(&self, ident: &str) -> bool {
-        match self {
-            Item::Expression(expr) => expr.contains_ident(ident),
-            Item::Def(def) => def.items.contains_ident(ident),
-        }
-    }
-    fn terms(&self) -> usize {
-        todo!()
-    }
     fn wrapping(child: Self::Child) -> Self {
         Item::Expression(child)
     }
@@ -39,21 +30,39 @@ pub struct Items {
 
 impl Node for Items {
     type Child = Item;
-    fn contains_ident(&self, ident: &str) -> bool {
-        self.items.iter().any(|item| item.contains_ident(ident))
-    }
-    fn terms(&self) -> usize {
-        self.items.iter().map(Item::terms).sum()
-    }
     fn wrapping(child: Self::Child) -> Self {
         Items { items: vec![child] }
     }
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]
-#[display(fmt = "{}", ident)]
+pub struct TypeVariant {
+    pub ident: String,
+}
+
+#[derive(Debug, Display, Clone, PartialEq)]
+#[display(
+    fmt = "{}",
+    r#"variants.iter().map(ToString::to_string).intersperse(" ".into()).collect::<String>()"#
+)]
+pub struct TypeList {
+    pub variants: Vec<TypeVariant>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Param {
     pub ident: String,
+    pub types: TypeList,
+}
+
+impl fmt::Display for Param {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.ident)?;
+        if !self.types.variants.is_empty() {
+            write!(f, ":{}", self.types)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]
@@ -126,8 +135,6 @@ where
 
 pub trait Node {
     type Child;
-    fn contains_ident(&self, ident: &str) -> bool;
-    fn terms(&self) -> usize;
     fn wrapping(child: Self::Child) -> Self;
 }
 
@@ -136,21 +143,6 @@ where
     T: Node,
 {
     type Child = T;
-    fn contains_ident(&self, ident: &str) -> bool {
-        self.left.contains_ident(ident)
-            || self
-                .rights
-                .iter()
-                .any(|right| right.expr.contains_ident(ident))
-    }
-    fn terms(&self) -> usize {
-        self.left.terms()
-            + self
-                .rights
-                .iter()
-                .map(|right| right.expr.terms())
-                .sum::<usize>()
-    }
     fn wrapping(child: Self::Child) -> Self {
         BinExpr::new(child, Vec::new())
     }
@@ -181,12 +173,6 @@ where
     O: Default,
 {
     type Child = T;
-    fn contains_ident(&self, ident: &str) -> bool {
-        self.expr.contains_ident(ident)
-    }
-    fn terms(&self) -> usize {
-        self.expr.terms()
-    }
     fn wrapping(child: Self::Child) -> Self {
         UnExpr {
             op: None,
@@ -241,7 +227,40 @@ pub enum OpMDR {
 
 pub type Expression = ExprOr;
 pub type ExprOr = BinExpr<OpOr, ExprAnd>;
-pub type ExprAnd = BinExpr<OpAnd, ExprCmp>;
+pub type ExprAnd = BinExpr<OpAnd, ExprIs>;
+
+#[derive(Debug, Display, Clone, PartialEq)]
+pub enum IsRight {
+    Pattern(Param),
+    Expression(ExprCmp),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprIs {
+    pub left: ExprCmp,
+    pub right: Option<IsRight>,
+}
+
+impl fmt::Display for ExprIs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.left)?;
+        if let Some(right) = &self.right {
+            write!(f, " is {}", right)?;
+        }
+        Ok(())
+    }
+}
+
+impl Node for ExprIs {
+    type Child = ExprCmp;
+    fn wrapping(child: Self::Child) -> Self {
+        ExprIs {
+            left: child,
+            right: None,
+        }
+    }
+}
+
 pub type ExprCmp = BinExpr<OpCmp, ExprAS>;
 pub type ExprAS = BinExpr<OpAS, ExprMDR>;
 pub type ExprMDR = BinExpr<OpMDR, ExprNot>;
@@ -302,12 +321,6 @@ impl fmt::Display for ExprCall {
 
 impl Node for ExprCall {
     type Child = Term;
-    fn contains_ident(&self, ident: &str) -> bool {
-        self.term.contains_ident(ident) || self.args.iter().any(|expr| expr.contains_ident(ident))
-    }
-    fn terms(&self) -> usize {
-        self.term.terms() + self.args.iter().map(|expr| expr.terms()).sum::<usize>()
-    }
     fn wrapping(child: Self::Child) -> Self {
         ExprCall {
             term: child,
@@ -340,21 +353,6 @@ pub enum Term {
 
 impl Node for Term {
     type Child = Items;
-    fn contains_ident(&self, ident: &str) -> bool {
-        match self {
-            Term::Expr(items) => items.contains_ident(ident),
-            Term::Ident(p) => p == ident,
-            Term::Closure(f) => f.contains_ident(ident),
-            _ => false,
-        }
-    }
-    fn terms(&self) -> usize {
-        if let Term::Expr(items) = self {
-            items.terms()
-        } else {
-            1
-        }
-    }
     fn wrapping(child: Self::Child) -> Self {
         Term::Expr(Box::new(child))
     }
@@ -364,15 +362,6 @@ impl Node for Term {
 pub struct Closure {
     pub params: Params,
     pub body: Items,
-}
-
-impl Closure {
-    fn contains_ident(&self, ident: &str) -> bool {
-        self.body
-            .items
-            .iter()
-            .any(|items| items.contains_ident(ident))
-    }
 }
 
 impl fmt::Display for Closure {

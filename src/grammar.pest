@@ -4,7 +4,7 @@ ws = _{ WHITESPACE | NEWLINE }
 single_line_comment = @{ "#" ~ (!NEWLINE ~ ANY)* ~ &NEWLINE }
 multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ "'''" }
 COMMENT = _{ multi_line_comment | single_line_comment }
-keyword = { "true" | "false" | "is" | "and" | "or" | "end" }
+keyword = { "true" | "false" | "nil" | "is" | "and" | "or" | "not" | "end" }
 
 // Numbers
 nat = @{ ASCII_DIGIT+ }
@@ -22,15 +22,17 @@ unicode    = @{ "u" ~ "{" ~ unicode_hex ~ "}" }
 escape     = @{ "\\" ~ (predefined | byte | unicode) }
 
 // Idents
-ident_start_char = { LETTER }
-ident_inner_char = { ident_start_char | "_" }
-ident_inner = @{ ident_start_char ~ ident_inner_char* }
+ident_inner = @{ LETTER ~ ("_"* ~ (LETTER | DECIMAL_NUMBER | OTHER_NUMBER)+)* }
 ident = { !keyword ~ ident_inner }
+
+// Types
+type_variant = { ident | nil }
+type_list = { type_variant ~ ("/" ~ type_variant)* }
 
 // Operators
 op_as = { "+" | "-" }
 op_mdr = { "*" | "/" | "%" }
-op_comp = { "is" | "<=" | ">=" | "<" | ">" }
+op_comp = { "<=" | ">=" | "<" | ">" }
 op_and = { "and" }
 op_or = { "or" }
 op_not = { "not" }
@@ -40,9 +42,9 @@ paren_expr = { "(" ~ items ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
 bar = { "|" }
-param = { ident }
+param = { ident ~ (":" ~ type_list) }
 closure = { param* ~ bar ~ items}
-term = { real | int | nat | bool_literal | nil | string | closure | ident | paren_expr }
+term = { closure | ident | real | int | nat | bool_literal | nil | string | paren_expr }
 expr_call_single = { term+ }
 chain_call = { "," ~ horiz_ws* ~ NEWLINE? }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
@@ -50,8 +52,8 @@ expr_not = { op_not? ~ expr_call }
 expr_mdr = { expr_not ~ (op_mdr ~ expr_not)* }
 expr_as = { expr_mdr ~ (op_as ~ expr_mdr)* }
 expr_cmp = { expr_as ~ (op_comp ~ expr_as)* }
-expr_is = { expr_is ~ ("is" ~ )* }
-expr_and = { expr_cmp ~ (NEWLINE? ~ op_and ~ NEWLINE? ~ expr_cmp)* }
+expr_is = { expr_cmp ~ ("is" ~ (param | expr_cmp))* }
+expr_and = { expr_is ~ (NEWLINE? ~ op_and ~ NEWLINE? ~ expr_is)* }
 expr_or = { expr_and ~ (NEWLINE? ~ op_or ~ NEWLINE? ~ expr_and)* }
 expr = { expr_or }
 
