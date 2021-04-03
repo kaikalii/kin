@@ -12,10 +12,12 @@ use crate::{ast::*, parse::Rule, types::*};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ResolutionErrorKind {
-    #[error("Unknown type {:}", _0)]
+    #[error("Unknown type {}", _0)]
     UnknownType(String),
-    #[error("Unknown definition {:}", _0)]
+    #[error("Unknown definition {}", _0)]
     UnknownDef(String),
+    #[error("Type annotation needed")]
+    UnresolvedType,
 }
 
 impl ResolutionErrorKind {
@@ -156,7 +158,7 @@ impl<'a> Resolve<'a> for Type<'a> {
                 }
             }
         }
-        if self.resolved != ResolvedType::Error {
+        if self.resolved != ResolvedType::Error && !variants.is_empty() {
             self.resolved = ResolvedType::Resolved(ConcreteType { variants });
         }
     }
@@ -196,14 +198,27 @@ impl<'a> Resolve<'a> for Item<'a> {
 
 impl<'a> Resolve<'a> for Def<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
+        // Resolve return type
         self.ret.resolve(res);
-
+        // Push a scope for this def
         res.push_scope();
-
+        // Resolve parameters and items
         self.params.resolve(res);
         self.items.resolve(res);
-
+        // Pop the def's scope
         res.pop_scope();
+        // Make sure all types are resolved
+        if self.ret.resolved == ResolvedType::Unresolved {
+            res.errors
+                .push(UnresolvedType.span(self.ident.span.clone()));
+        }
+        for param in &self.params.params {
+            if param.ty.resolved == ResolvedType::Unresolved {
+                res.errors
+                    .push(UnresolvedType.span(param.ident.span.clone()));
+            }
+        }
+        // Push the def into its enclosing scope
         res.push_def(self.ident.name.clone(), self.clone());
     }
 }
