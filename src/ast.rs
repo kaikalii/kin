@@ -6,7 +6,7 @@ use colored::Colorize;
 use derive_more::Display;
 use itertools::Itertools;
 
-use crate::types::Type;
+use crate::types::*;
 
 #[derive(Debug, Display, Clone, PartialEq)]
 pub enum Item {
@@ -37,32 +37,17 @@ impl Node for Items {
     }
 }
 
-#[derive(Debug, Display, Clone, PartialEq)]
-pub struct UnresolvedType {
-    pub ident: String,
-}
-
-#[derive(Debug, Display, Clone, PartialEq, Default)]
-#[display(
-    fmt = "{}",
-    r#"unresolved.iter().map(ToString::to_string).intersperse(" ".into()).collect::<String>()"#
-)]
-pub struct TypePair {
-    pub unresolved: Vec<UnresolvedType>,
-    pub resolved: Option<Type>,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Param {
     pub ident: String,
-    pub types: TypePair,
+    pub ty: Type,
 }
 
 impl fmt::Display for Param {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.ident)?;
-        if !self.types.unresolved.is_empty() {
-            write!(f, ":{}", self.types)?;
+        if !self.ty.unresolved.is_empty() {
+            write!(f, ":{}", self.ty)?;
         }
         Ok(())
     }
@@ -80,7 +65,7 @@ pub struct Params {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Def {
     pub ident: String,
-    pub ret: TypePair,
+    pub ret: Type,
     pub params: Params,
     pub items: Items,
 }

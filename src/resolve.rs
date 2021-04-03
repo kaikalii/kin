@@ -29,7 +29,7 @@ impl Resolver {
         res.push_type("text", Variant::Text.into());
         res
     }
-    pub fn find_type(&self, name: &str) -> Option<&Type> {
+    pub fn find_type(&self, name: &str) -> Option<&ConcreteType> {
         self.scopes
             .iter()
             .rev()
@@ -49,7 +49,7 @@ impl Resolver {
             .rev()
             .any(|scope| scope.defs.contains_key(name) || scope.param_defs.contains_key(name))
     }
-    pub fn push_type<N>(&mut self, name: N, ty: Type)
+    pub fn push_type<N>(&mut self, name: N, ty: ConcreteType)
     where
         N: Into<String>,
     {
@@ -73,7 +73,7 @@ impl Resolver {
             .or_default()
             .push(def);
     }
-    pub fn push_param_def<N>(&mut self, name: N, type_pair: TypePair)
+    pub fn push_param_def<N>(&mut self, name: N, type_pair: Type)
     where
         N: Into<String>,
     {
@@ -94,33 +94,44 @@ impl Resolver {
 
 #[derive(Default)]
 pub struct Scope {
-    pub types: HashMap<String, Vec<Type>>,
+    pub types: HashMap<String, Vec<ConcreteType>>,
     pub defs: HashMap<String, Vec<Def>>,
-    pub param_defs: HashMap<String, TypePair>,
+    pub param_defs: HashMap<String, Type>,
 }
 
 pub trait Resolve {
     fn resolve(&mut self, res: &mut Resolver);
 }
 
-impl Resolve for TypePair {
+impl Resolve for Type {
     fn resolve(&mut self, res: &mut Resolver) {
         let mut variants: BTreeSet<Variant> = BTreeSet::new();
         for unresolved in &self.unresolved {
-            if let Some(resolved) = res.find_type(&unresolved.ident).cloned() {
-                variants.extend(resolved.variants);
-            } else {
-                res.errors
-                    .insert(ResolutionError::UnknownType(unresolved.ident.clone()));
+            match unresolved {
+                UnresolvedVariant::Ident(ident) => {
+                    if let Some(resolved) = res.find_type(ident).cloned() {
+                        variants.extend(resolved.variants);
+                    } else {
+                        res.errors
+                            .insert(ResolutionError::UnknownType(ident.clone()));
+                        self.resolved = ResolvedType::Error;
+                    }
+                }
+                UnresolvedVariant::Nil => {
+                    variants.insert(Variant::Nil);
+                }
             }
         }
-        self.resolved = Some(Type { variants });
+        if self.resolved != ResolvedType::Error {
+            self.resolved = ResolvedType::Resolved(ConcreteType { variants });
+        }
     }
 }
 
 impl Resolve for Param {
     fn resolve(&mut self, res: &mut Resolver) {
-        self.types.resolve(res)
+        self.ty.resolve(res);
+        res.push_param_def(self.ident.clone(), self.ty.clone());
     }
 }
 
@@ -152,13 +163,10 @@ impl Resolve for Item {
 impl Resolve for Def {
     fn resolve(&mut self, res: &mut Resolver) {
         self.ret.resolve(res);
-        self.params.resolve(res);
 
         res.push_scope();
-        for param in &self.params.params {
-            res.push_param_def(param.ident.clone(), param.types.clone());
-        }
 
+        self.params.resolve(res);
         self.items.resolve(res);
 
         res.pop_scope();
@@ -241,8 +249,10 @@ impl Resolve for Term {
     fn resolve(&mut self, res: &mut Resolver) {
         match self {
             Term::Closure(closure) => {
+                res.push_scope();
                 closure.params.resolve(res);
                 closure.body.resolve(res);
+                res.pop_scope();
             }
             Term::Expr(expr) => expr.resolve(res),
             Term::Ident(ident) if !res.def_exists(ident) => {

@@ -7,7 +7,7 @@ use pest::{
     Parser, RuleType,
 };
 
-use crate::ast::*;
+use crate::{ast::*, types::*};
 
 pub type ParseResult<T> = Result<T, PestError<Rule>>;
 
@@ -59,34 +59,39 @@ fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
     })
 }
 
-fn parse_type_list(pair: Pair<Rule>) -> TypePair {
-    let mut variants = Vec::new();
+fn parse_type_list(pair: Pair<Rule>) -> Type {
+    let mut unresolved = Vec::new();
     for pair in pair.into_inner() {
         match pair.as_rule() {
-            Rule::type_variant => {
-                let ident = pair.as_str().to_owned();
-                variants.push(UnresolvedType { ident });
+            Rule::ident => unresolved.push(UnresolvedVariant::Ident(pair.as_str().into())),
+            Rule::nil => unresolved.push(UnresolvedVariant::Nil),
+            Rule::question_mark => {
+                assert!(unresolved.len() == 1);
+                unresolved.push(UnresolvedVariant::Nil);
             }
             rule => unreachable!("{:?}", rule),
         }
     }
-    TypePair {
-        unresolved: variants,
-        resolved: None,
+    Type {
+        unresolved,
+        resolved: ResolvedType::Unresolved,
     }
 }
 
 fn parse_param(pair: Pair<Rule>) -> Param {
     let mut pairs = pair.into_inner();
     let ident = pairs.next().unwrap().as_str().to_owned();
-    let types = pairs.next().map(parse_type_list).unwrap_or_default();
-    Param { ident, types }
+    let types = pairs.next().map(parse_type_list).unwrap_or_else(|| Type {
+        unresolved: Vec::new(),
+        resolved: ResolvedType::Unresolved,
+    });
+    Param { ident, ty: types }
 }
 
 fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
-    let Param { ident, types: ret } = parse_param(pairs.next().unwrap());
+    let Param { ident, ty: ret } = parse_param(pairs.next().unwrap());
     let mut params = Vec::new();
     for pair in pairs.by_ref() {
         if let Rule::param = pair.as_rule() {
