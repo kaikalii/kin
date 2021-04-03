@@ -20,7 +20,7 @@ unicode    = @{ "u" ~ "{" ~ unicode_hex ~ "}" }
 escape     = @{ "\\" ~ (predefined | byte | unicode) }
 
 // Idents
-ident_inner = @{ LETTER ~ ("_"* ~ (LETTER | DECIMAL_NUMBER | OTHER_NUMBER)+)* }
+ident_inner = @{ (LETTER | OTHER_SYMBOL) ~ ("_"* ~ (LETTER | OTHER_SYMBOL | DECIMAL_NUMBER | OTHER_NUMBER)+)* }
 ident = { !keyword ~ ident_inner | "_" }
 
 // Types
