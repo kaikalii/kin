@@ -63,7 +63,7 @@ fn parse_type_list(pair: Pair<Rule>) -> Type {
     let mut unresolved = Vec::new();
     for pair in pair.into_inner() {
         match pair.as_rule() {
-            Rule::ident => unresolved.push(UnresolvedVariant::Ident(pair.as_str().into())),
+            Rule::ident => unresolved.push(UnresolvedVariant::Ident(parse_ident(pair))),
             Rule::nil => unresolved.push(UnresolvedVariant::Nil),
             Rule::question_mark => {
                 assert!(unresolved.len() == 1);
@@ -78,9 +78,16 @@ fn parse_type_list(pair: Pair<Rule>) -> Type {
     }
 }
 
+fn parse_ident(pair: Pair<Rule>) -> Ident {
+    Ident {
+        name: pair.as_str().into(),
+        span: pair.as_span(),
+    }
+}
+
 fn parse_param(pair: Pair<Rule>) -> Param {
     let mut pairs = pair.into_inner();
-    let ident = pairs.next().unwrap().as_str().to_owned();
+    let ident = parse_ident(pairs.next().unwrap());
     let types = pairs.next().map(parse_type_list).unwrap_or_else(|| Type {
         unresolved: Vec::new(),
         resolved: ResolvedType::Unresolved,
@@ -330,7 +337,7 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
         Rule::real => number_literal!(Real)?,
         Rule::nil => Term::Nil,
         Rule::bool_literal => Term::Bool(pair.as_str() == "true"),
-        Rule::ident => Term::Ident(pair.as_str().into()),
+        Rule::ident => Term::Ident(parse_ident(pair)),
         Rule::paren_expr => {
             let pair = only(pair);
             let items = parse_items(pair)?;

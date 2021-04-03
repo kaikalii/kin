@@ -5,17 +5,38 @@ use std::fmt;
 use colored::Colorize;
 use derive_more::Display;
 use itertools::Itertools;
+use pest::Span;
 
 use crate::types::*;
 
-#[derive(Debug, Display, Clone, PartialEq)]
-pub enum Item {
-    Expression(Expression),
-    Def(Def),
+#[derive(Debug, Clone)]
+pub struct Ident<'a> {
+    pub name: String,
+    pub span: Span<'a>,
 }
 
-impl Node for Item {
-    type Child = Expression;
+impl<'a> PartialEq for Ident<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl<'a> Eq for Ident<'a> {}
+
+impl<'a> fmt::Display for Ident<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+#[derive(Debug, Display, Clone, PartialEq)]
+pub enum Item<'a> {
+    Expression(Expression<'a>),
+    Def(Def<'a>),
+}
+
+impl<'a> Node for Item<'a> {
+    type Child = Expression<'a>;
     fn wrapping(child: Self::Child) -> Self {
         Item::Expression(child)
     }
@@ -26,24 +47,24 @@ impl Node for Item {
     fmt = "{}",
     r#"items.iter().map(ToString::to_string).intersperse("\n\n".into()).collect::<String>()"#
 )]
-pub struct Items {
-    pub items: Vec<Item>,
+pub struct Items<'a> {
+    pub items: Vec<Item<'a>>,
 }
 
-impl Node for Items {
-    type Child = Item;
+impl<'a> Node for Items<'a> {
+    type Child = Item<'a>;
     fn wrapping(child: Self::Child) -> Self {
         Items { items: vec![child] }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Param {
-    pub ident: String,
-    pub ty: Type,
+pub struct Param<'a> {
+    pub ident: Ident<'a>,
+    pub ty: Type<'a>,
 }
 
-impl fmt::Display for Param {
+impl<'a> fmt::Display for Param<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.ident)?;
         if !self.ty.unresolved.is_empty() {
@@ -58,19 +79,19 @@ impl fmt::Display for Param {
     fmt = "{}",
     r#"params.iter().map(ToString::to_string).intersperse(" ".into()).collect::<String>()"#
 )]
-pub struct Params {
-    pub params: Vec<Param>,
+pub struct Params<'a> {
+    pub params: Vec<Param<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Def {
-    pub ident: String,
-    pub ret: Type,
-    pub params: Params,
-    pub items: Items,
+pub struct Def<'a> {
+    pub ident: Ident<'a>,
+    pub ret: Type<'a>,
+    pub params: Params<'a>,
+    pub items: Items<'a>,
 }
 
-impl fmt::Display for Def {
+impl<'a> fmt::Display for Def<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.ident)?;
         if !self.ret.unresolved.is_empty() {
@@ -212,23 +233,23 @@ pub enum OpMDR {
     Rem,
 }
 
-pub type Expression = ExprOr;
-pub type ExprOr = BinExpr<OpOr, ExprAnd>;
-pub type ExprAnd = BinExpr<OpAnd, ExprIs>;
+pub type Expression<'a> = ExprOr<'a>;
+pub type ExprOr<'a> = BinExpr<OpOr, ExprAnd<'a>>;
+pub type ExprAnd<'a> = BinExpr<OpAnd, ExprIs<'a>>;
 
 #[derive(Debug, Display, Clone, PartialEq)]
-pub enum IsRight {
-    Pattern(Param),
-    Expression(ExprCmp),
+pub enum IsRight<'a> {
+    Pattern(Param<'a>),
+    Expression(ExprCmp<'a>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprIs {
-    pub left: ExprCmp,
-    pub right: Option<IsRight>,
+pub struct ExprIs<'a> {
+    pub left: ExprCmp<'a>,
+    pub right: Option<IsRight<'a>>,
 }
 
-impl fmt::Display for ExprIs {
+impl<'a> fmt::Display for ExprIs<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.left)?;
         if let Some(right) = &self.right {
@@ -238,8 +259,8 @@ impl fmt::Display for ExprIs {
     }
 }
 
-impl Node for ExprIs {
-    type Child = ExprCmp;
+impl<'a> Node for ExprIs<'a> {
+    type Child = ExprCmp<'a>;
     fn wrapping(child: Self::Child) -> Self {
         ExprIs {
             left: child,
@@ -248,10 +269,10 @@ impl Node for ExprIs {
     }
 }
 
-pub type ExprCmp = BinExpr<OpCmp, ExprAS>;
-pub type ExprAS = BinExpr<OpAS, ExprMDR>;
-pub type ExprMDR = BinExpr<OpMDR, ExprNot>;
-pub type ExprNot = UnExpr<OpNot, ExprCall>;
+pub type ExprCmp<'a> = BinExpr<OpCmp, ExprAS<'a>>;
+pub type ExprAS<'a> = BinExpr<OpAS, ExprMDR<'a>>;
+pub type ExprMDR<'a> = BinExpr<OpMDR, ExprNot<'a>>;
+pub type ExprNot<'a> = UnExpr<OpNot, ExprCall<'a>>;
 
 fn _expression_size() {
     #[allow(invalid_value)]
@@ -259,13 +280,13 @@ fn _expression_size() {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExprCall {
-    pub term: Term,
-    pub args: Vec<Term>,
+pub struct ExprCall<'a> {
+    pub term: Term<'a>,
+    pub args: Vec<Term<'a>>,
     pub chained: Option<String>,
 }
 
-impl fmt::Display for ExprCall {
+impl<'a> fmt::Display for ExprCall<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         #[cfg(feature = "debug")]
         write!(f, "{{")?;
@@ -306,8 +327,8 @@ impl fmt::Display for ExprCall {
     }
 }
 
-impl Node for ExprCall {
-    type Child = Term;
+impl<'a> Node for ExprCall<'a> {
+    type Child = Term<'a>;
     fn wrapping(child: Self::Child) -> Self {
         ExprCall {
             term: child,
@@ -318,40 +339,40 @@ impl Node for ExprCall {
 }
 
 #[derive(Debug, Display, Clone, PartialEq)]
-pub enum Term {
+pub enum Term<'a> {
     #[display(fmt = "({})", _0)]
-    Expr(Box<Items>),
+    Expr(Box<Items<'a>>),
     #[display(fmt = "{}", "_0.to_string().blue()")]
     Nat(u64),
     #[display(fmt = "{}", "_0.to_string().blue()")]
     Int(i64),
     #[display(fmt = "{}", "_0.to_string().blue()")]
     Real(f64),
-    #[display(fmt = "{}", "_0.bright_white()")]
-    Ident(String),
+    #[display(fmt = "{}", "_0.to_string().bright_white()")]
+    Ident(Ident<'a>),
     #[display(fmt = "{}", "_0.to_string().blue()")]
     Bool(bool),
     #[display(fmt = "{}", "format!(\"{:?}\", _0).yellow()")]
     String(String),
-    Closure(Box<Closure>),
+    Closure(Box<Closure<'a>>),
     #[display(fmt = "{}", "\"nil\".blue()")]
     Nil,
 }
 
-impl Node for Term {
-    type Child = Items;
+impl<'a> Node for Term<'a> {
+    type Child = Items<'a>;
     fn wrapping(child: Self::Child) -> Self {
         Term::Expr(Box::new(child))
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Closure {
-    pub params: Params,
-    pub body: Items,
+pub struct Closure<'a> {
+    pub params: Params<'a>,
+    pub body: Items<'a>,
 }
 
-impl fmt::Display for Closure {
+impl<'a> fmt::Display for Closure<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} | {}", self.params, self.body)
     }

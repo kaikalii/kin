@@ -1,25 +1,59 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::{
+    collections::{BTreeSet, HashMap},
+    fmt,
+};
 
-use crate::{ast::*, types::*};
+use pest::{
+    error::{Error as PestError, ErrorVariant},
+    Span,
+};
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq, Hash)]
-pub enum ResolutionError {
+use crate::{ast::*, parse::Rule, types::*};
+
+#[derive(Debug, thiserror::Error)]
+pub enum ResolutionErrorKind {
     #[error("Unknown type {:}", _0)]
     UnknownType(String),
     #[error("Unknown definition {:}", _0)]
     UnknownDef(String),
 }
 
-pub struct Resolver {
-    scopes: Vec<Scope>,
-    pub errors: HashSet<ResolutionError>,
+impl ResolutionErrorKind {
+    pub fn span(self, span: Span) -> ResolutionError {
+        ResolutionError { kind: self, span }
+    }
 }
 
-impl Resolver {
-    pub fn new() -> Resolver {
+use ResolutionErrorKind::*;
+
+#[derive(Debug)]
+pub struct ResolutionError<'a> {
+    pub kind: ResolutionErrorKind,
+    pub span: Span<'a>,
+}
+
+impl<'a> fmt::Display for ResolutionError<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let error = PestError::<Rule>::new_from_span(
+            ErrorVariant::CustomError {
+                message: self.kind.to_string(),
+            },
+            self.span.clone(),
+        );
+        write!(f, "{}", error)
+    }
+}
+
+pub struct Resolver<'a> {
+    scopes: Vec<Scope<'a>>,
+    pub errors: Vec<ResolutionError<'a>>,
+}
+
+impl<'a> Resolver<'a> {
+    pub fn new() -> Self {
         let mut res = Resolver {
             scopes: vec![Scope::default()],
-            errors: HashSet::new(),
+            errors: Vec::new(),
         };
         res.push_type("nil", Variant::Nil.into());
         res.push_type("bool", Variant::Bool.into());
@@ -61,7 +95,7 @@ impl Resolver {
             .or_default()
             .push(ty);
     }
-    pub fn push_def<N>(&mut self, name: N, def: Def)
+    pub fn push_def<N>(&mut self, name: N, def: Def<'a>)
     where
         N: Into<String>,
     {
@@ -73,7 +107,7 @@ impl Resolver {
             .or_default()
             .push(def);
     }
-    pub fn push_param_def<N>(&mut self, name: N, type_pair: Type)
+    pub fn push_param_def<N>(&mut self, name: N, ty: Type<'a>)
     where
         N: Into<String>,
     {
@@ -81,7 +115,7 @@ impl Resolver {
             .last_mut()
             .unwrap()
             .param_defs
-            .insert(name.into(), type_pair);
+            .insert(name.into(), ty);
     }
     pub fn push_scope(&mut self) {
         self.scopes.push(Scope::default());
@@ -93,27 +127,27 @@ impl Resolver {
 }
 
 #[derive(Default)]
-pub struct Scope {
+pub struct Scope<'a> {
     pub types: HashMap<String, Vec<ConcreteType>>,
-    pub defs: HashMap<String, Vec<Def>>,
-    pub param_defs: HashMap<String, Type>,
+    pub defs: HashMap<String, Vec<Def<'a>>>,
+    pub param_defs: HashMap<String, Type<'a>>,
 }
 
-pub trait Resolve {
-    fn resolve(&mut self, res: &mut Resolver);
+pub trait Resolve<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>);
 }
 
-impl Resolve for Type {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for Type<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         let mut variants: BTreeSet<Variant> = BTreeSet::new();
         for unresolved in &self.unresolved {
             match unresolved {
                 UnresolvedVariant::Ident(ident) => {
-                    if let Some(resolved) = res.find_type(ident).cloned() {
+                    if let Some(resolved) = res.find_type(&ident.name).cloned() {
                         variants.extend(resolved.variants);
                     } else {
                         res.errors
-                            .insert(ResolutionError::UnknownType(ident.clone()));
+                            .push(UnknownType(ident.name.clone()).span(ident.span.clone()));
                         self.resolved = ResolvedType::Error;
                     }
                 }
@@ -128,31 +162,31 @@ impl Resolve for Type {
     }
 }
 
-impl Resolve for Param {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for Param<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.ty.resolve(res);
-        res.push_param_def(self.ident.clone(), self.ty.clone());
+        res.push_param_def(self.ident.name.clone(), self.ty.clone());
     }
 }
 
-impl Resolve for Params {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for Params<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         for param in &mut self.params {
             param.resolve(res);
         }
     }
 }
 
-impl Resolve for Items {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for Items<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         for item in &mut self.items {
             item.resolve(res);
         }
     }
 }
 
-impl Resolve for Item {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for Item<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         match self {
             Item::Expression(expr) => expr.resolve(res),
             Item::Def(def) => def.resolve(res),
@@ -160,8 +194,8 @@ impl Resolve for Item {
     }
 }
 
-impl Resolve for Def {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for Def<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.ret.resolve(res);
 
         res.push_scope();
@@ -170,12 +204,12 @@ impl Resolve for Def {
         self.items.resolve(res);
 
         res.pop_scope();
-        res.push_def(self.ident.clone(), self.clone());
+        res.push_def(self.ident.name.clone(), self.clone());
     }
 }
 
-impl Resolve for ExprOr {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for ExprOr<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.left.resolve(res);
         for right in &mut self.rights {
             right.expr.resolve(res);
@@ -183,8 +217,8 @@ impl Resolve for ExprOr {
     }
 }
 
-impl Resolve for ExprAnd {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for ExprAnd<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.left.resolve(res);
         for right in &mut self.rights {
             right.expr.resolve(res);
@@ -192,8 +226,8 @@ impl Resolve for ExprAnd {
     }
 }
 
-impl Resolve for ExprIs {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for ExprIs<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.left.resolve(res);
         match &mut self.right {
             Some(IsRight::Expression(expr)) => expr.resolve(res),
@@ -203,8 +237,8 @@ impl Resolve for ExprIs {
     }
 }
 
-impl Resolve for ExprCmp {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for ExprCmp<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.left.resolve(res);
         for right in &mut self.rights {
             right.expr.resolve(res);
@@ -212,8 +246,8 @@ impl Resolve for ExprCmp {
     }
 }
 
-impl Resolve for ExprAS {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for ExprAS<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.left.resolve(res);
         for right in &mut self.rights {
             right.expr.resolve(res);
@@ -221,8 +255,8 @@ impl Resolve for ExprAS {
     }
 }
 
-impl Resolve for ExprMDR {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for ExprMDR<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.left.resolve(res);
         for right in &mut self.rights {
             right.expr.resolve(res);
@@ -230,14 +264,14 @@ impl Resolve for ExprMDR {
     }
 }
 
-impl Resolve for ExprNot {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for ExprNot<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.expr.resolve(res);
     }
 }
 
-impl Resolve for ExprCall {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for ExprCall<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.term.resolve(res);
         for arg in &mut self.args {
             arg.resolve(res);
@@ -245,8 +279,8 @@ impl Resolve for ExprCall {
     }
 }
 
-impl Resolve for Term {
-    fn resolve(&mut self, res: &mut Resolver) {
+impl<'a> Resolve<'a> for Term<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
         match self {
             Term::Closure(closure) => {
                 res.push_scope();
@@ -255,10 +289,9 @@ impl Resolve for Term {
                 res.pop_scope();
             }
             Term::Expr(expr) => expr.resolve(res),
-            Term::Ident(ident) if !res.def_exists(ident) => {
-                res.errors
-                    .insert(ResolutionError::UnknownDef(ident.clone()));
-            }
+            Term::Ident(ident) if !res.def_exists(&ident.name) => res
+                .errors
+                .push(UnknownDef(ident.name.clone()).span(ident.span.clone())),
             _ => {}
         }
     }

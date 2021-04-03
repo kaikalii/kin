@@ -1,5 +1,7 @@
 use std::{collections::BTreeSet, fmt};
 
+use crate::ast::Ident;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Variant {
     Nil,
@@ -71,12 +73,12 @@ impl fmt::Display for Signature {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum UnresolvedVariant {
-    Ident(String),
+pub enum UnresolvedVariant<'a> {
+    Ident(Ident<'a>),
     Nil,
 }
 
-impl fmt::Display for UnresolvedVariant {
+impl<'a> fmt::Display for UnresolvedVariant<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             UnresolvedVariant::Ident(ident) => write!(f, "{}", ident),
@@ -86,12 +88,12 @@ impl fmt::Display for UnresolvedVariant {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Type {
-    pub unresolved: Vec<UnresolvedVariant>,
+pub struct Type<'a> {
+    pub unresolved: Vec<UnresolvedVariant<'a>>,
     pub resolved: ResolvedType,
 }
 
-impl fmt::Display for Type {
+impl<'a> fmt::Display for Type<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, variant) in self.unresolved.iter().enumerate() {
             if i != 0 {
