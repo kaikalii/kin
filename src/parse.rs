@@ -79,7 +79,7 @@ fn parse_type_list(pair: Pair<Rule>) -> TypePair {
 fn parse_param(pair: Pair<Rule>) -> Param {
     let mut pairs = pair.into_inner();
     let ident = pairs.next().unwrap().as_str().to_owned();
-    let types = parse_type_list(pairs.next().unwrap());
+    let types = pairs.next().map(parse_type_list).unwrap_or_default();
     Param { ident, types }
 }
 

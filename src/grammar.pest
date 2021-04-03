@@ -1,6 +1,4 @@
-horiz_ws = _{ " " | "\t" | "\r" }
-WHITESPACE = _{ horiz_ws }
-ws = _{ WHITESPACE | NEWLINE }
+WHITESPACE = _{ " " | "\t" | "\r" }
 single_line_comment = @{ "#" ~ (!NEWLINE ~ ANY)* ~ &NEWLINE }
 multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ "'''" }
 COMMENT = _{ multi_line_comment | single_line_comment }
@@ -8,7 +6,7 @@ keyword = { "true" | "false" | "nil" | "is" | "and" | "or" | "not" | "end" }
 
 // Numbers
 nat = @{ ASCII_DIGIT+ }
-int = @{ ("+" | "-")+ ~ nat }
+int = @{ ("+" | "-") ~ nat }
 real = @{ int ~ ("." ~ ASCII_DIGIT*)+ ~ (^"e" ~ int)? }
 
 // String literals
@@ -42,11 +40,11 @@ paren_expr = { "(" ~ items ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
 bar = { "|" }
-param = { ident ~ (":" ~ type_list) }
+param = { ident ~ (":" ~ type_list)? }
 closure = { param* ~ bar ~ items}
-term = { closure | ident | real | int | nat | bool_literal | nil | string | paren_expr }
+term = { real | int | nat | closure | ident | bool_literal | nil | string | paren_expr }
 expr_call_single = { term+ }
-chain_call = { "," ~ horiz_ws* ~ NEWLINE? }
+chain_call = { "," ~ NEWLINE? }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
 expr_not = { op_not? ~ expr_call }
 expr_mdr = { expr_not ~ (op_mdr ~ expr_not)* }
@@ -62,4 +60,4 @@ equals = { "=" }
 def = { param+ ~ equals ~ (NEWLINE ~ items ~ "end" | expr) }
 item = { def | expr }
 items = { (item ~ NEWLINE*)+ }
-file = { SOI ~ ws* ~ items? ~ EOI }
+file = { SOI ~ NEWLINE* ~ items? ~ EOI }

@@ -42,7 +42,7 @@ pub struct UnresolvedType {
     pub ident: String,
 }
 
-#[derive(Debug, Display, Clone, PartialEq)]
+#[derive(Debug, Display, Clone, PartialEq, Default)]
 #[display(
     fmt = "{}",
     r#"unresolved.iter().map(ToString::to_string).intersperse(" ".into()).collect::<String>()"#
