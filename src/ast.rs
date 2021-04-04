@@ -7,8 +7,6 @@ use derive_more::Display;
 use itertools::Itertools;
 use pest::Span;
 
-use crate::types::*;
-
 #[derive(Debug, Clone)]
 pub struct Ident<'a> {
     pub name: String,
@@ -61,16 +59,11 @@ impl<'a> Node for Items<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Param<'a> {
     pub ident: Ident<'a>,
-    pub ty: Type<'a>,
 }
 
 impl<'a> fmt::Display for Param<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.ident)?;
-        if !self.ty.unresolved.is_empty() {
-            write!(f, ":{}", self.ty)?;
-        }
-        Ok(())
+        write!(f, "{}", self.ident)
     }
 }
 
@@ -86,7 +79,6 @@ pub struct Params<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Def<'a> {
     pub ident: Ident<'a>,
-    pub ret: Type<'a>,
     pub params: Params<'a>,
     pub items: Items<'a>,
 }
@@ -94,9 +86,6 @@ pub struct Def<'a> {
 impl<'a> fmt::Display for Def<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.ident)?;
-        if !self.ret.unresolved.is_empty() {
-            write!(f, ":{}", self.ret)?;
-        }
         if !self.params.params.is_empty() {
             write!(f, " {}", self.params)?;
         }

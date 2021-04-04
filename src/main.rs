@@ -5,7 +5,6 @@ mod ast;
 mod compile;
 mod parse;
 mod resolve;
-mod types;
 
 fn main() {
     use resolve::*;
@@ -15,8 +14,6 @@ fn main() {
     let input = std::fs::read_to_string("test.noot").unwrap();
     match parse::parse(&input) {
         Ok(mut items) => {
-            // println!("{}", items);
-
             println!();
 
             let mut resolver = Resolver::new();

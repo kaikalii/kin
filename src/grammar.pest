@@ -23,11 +23,6 @@ escape = @{ "\\" ~ (predefined | byte | unicode) }
 ident_inner = @{ (LETTER | OTHER_SYMBOL) ~ ("_"* ~ (LETTER | OTHER_SYMBOL | DECIMAL_NUMBER | OTHER_NUMBER)+)* }
 ident = { !keyword ~ ident_inner | "_" }
 
-// Types
-type_variant = _{ ident | nil }
-question_mark = { "?" }
-type_list = { type_variant ~ (("/" ~ type_variant)+ | question_mark)* }
-
 // Operators
 op_as = { "+" | "-" }
 op_mdr = { "*" | "/" | "%" }
@@ -41,7 +36,7 @@ paren_expr = { "(" ~ items ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
 bar = { "|" }
-param = { ident ~ (":" ~ type_list)? }
+param = { ident }
 closure = { param* ~ bar ~ items}
 term = { real | int | nat | closure | ident | bool_literal | nil | string | paren_expr }
 expr_call_single = { term+ }

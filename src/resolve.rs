@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{HashMap, HashSet},
     fmt,
 };
 
@@ -8,7 +8,7 @@ use pest::{
     Span,
 };
 
-use crate::{ast::*, parse::Rule, types::*};
+use crate::{ast::*, parse::Rule};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ResolutionErrorKind {
@@ -16,8 +16,6 @@ pub enum ResolutionErrorKind {
     UnknownType(String),
     #[error("Unknown definition {}", _0)]
     UnknownDef(String),
-    #[error("Type annotation needed")]
-    UnresolvedType,
 }
 
 impl ResolutionErrorKind {
@@ -53,24 +51,13 @@ pub struct Resolver<'a> {
 
 impl<'a> Resolver<'a> {
     pub fn new() -> Self {
-        let mut res = Resolver {
+        // let mut res =
+        Resolver {
             scopes: vec![Scope::default()],
             errors: Vec::new(),
-        };
-        res.push_type("nil", Variant::Nil.into());
-        res.push_type("bool", Variant::Bool.into());
-        res.push_type("nat", Variant::Nat.into());
-        res.push_type("int", Variant::Int.into());
-        res.push_type("real", Variant::Real.into());
-        res.push_type("text", Variant::Text.into());
-        res
-    }
-    pub fn find_type(&self, name: &str) -> Option<&ConcreteType> {
-        self.scopes
-            .iter()
-            .rev()
-            .find_map(|scope| scope.types.get(name))
-            .map(|stack| stack.last().unwrap())
+        }
+        // ;
+        // res
     }
     pub fn find_def(&self, name: &str) -> Option<&Def> {
         self.scopes
@@ -83,19 +70,7 @@ impl<'a> Resolver<'a> {
         self.scopes
             .iter()
             .rev()
-            .any(|scope| scope.defs.contains_key(name) || scope.param_defs.contains_key(name))
-    }
-    pub fn push_type<N>(&mut self, name: N, ty: ConcreteType)
-    where
-        N: Into<String>,
-    {
-        self.scopes
-            .last_mut()
-            .unwrap()
-            .types
-            .entry(name.into())
-            .or_default()
-            .push(ty);
+            .any(|scope| scope.defs.contains_key(name) || scope.param_defs.contains(name))
     }
     pub fn push_def<N>(&mut self, name: N, def: Def<'a>)
     where
@@ -109,7 +84,7 @@ impl<'a> Resolver<'a> {
             .or_default()
             .push(def);
     }
-    pub fn push_param_def<N>(&mut self, name: N, ty: Type<'a>)
+    pub fn push_param_def<N>(&mut self, name: N)
     where
         N: Into<String>,
     {
@@ -117,7 +92,7 @@ impl<'a> Resolver<'a> {
             .last_mut()
             .unwrap()
             .param_defs
-            .insert(name.into(), ty);
+            .insert(name.into());
     }
     pub fn push_scope(&mut self) {
         self.scopes.push(Scope::default());
@@ -130,44 +105,17 @@ impl<'a> Resolver<'a> {
 
 #[derive(Default)]
 pub struct Scope<'a> {
-    pub types: HashMap<String, Vec<ConcreteType>>,
     pub defs: HashMap<String, Vec<Def<'a>>>,
-    pub param_defs: HashMap<String, Type<'a>>,
+    pub param_defs: HashSet<String>,
 }
 
 pub trait Resolve<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>);
 }
 
-impl<'a> Resolve<'a> for Type<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        let mut variants: BTreeSet<Variant> = BTreeSet::new();
-        for unresolved in &self.unresolved {
-            match unresolved {
-                UnresolvedVariant::Ident(ident) => {
-                    if let Some(resolved) = res.find_type(&ident.name).cloned() {
-                        variants.extend(resolved.variants);
-                    } else {
-                        res.errors
-                            .push(UnknownType(ident.name.clone()).span(ident.span.clone()));
-                        self.resolved = ResolvedType::Error;
-                    }
-                }
-                UnresolvedVariant::Nil => {
-                    variants.insert(Variant::Nil);
-                }
-            }
-        }
-        if self.resolved != ResolvedType::Error && !variants.is_empty() {
-            self.resolved = ResolvedType::Resolved(ConcreteType { variants });
-        }
-    }
-}
-
 impl<'a> Resolve<'a> for Param<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.ty.resolve(res);
-        res.push_param_def(self.ident.name.clone(), self.ty.clone());
+        res.push_param_def(self.ident.name.clone());
     }
 }
 
@@ -198,8 +146,6 @@ impl<'a> Resolve<'a> for Item<'a> {
 
 impl<'a> Resolve<'a> for Def<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
-        // Resolve return type
-        self.ret.resolve(res);
         // Push a scope for this def
         res.push_scope();
         // Resolve parameters and items
@@ -207,17 +153,6 @@ impl<'a> Resolve<'a> for Def<'a> {
         self.items.resolve(res);
         // Pop the def's scope
         res.pop_scope();
-        // Make sure all types are resolved
-        if self.ret.resolved == ResolvedType::Unresolved {
-            res.errors
-                .push(UnresolvedType.span(self.ident.span.clone()));
-        }
-        for param in &self.params.params {
-            if param.ty.resolved == ResolvedType::Unresolved {
-                res.errors
-                    .push(UnresolvedType.span(param.ident.span.clone()));
-            }
-        }
         // Push the def into its enclosing scope
         res.push_def(self.ident.name.clone(), self.clone());
     }
