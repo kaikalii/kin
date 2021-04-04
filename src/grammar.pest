@@ -2,7 +2,7 @@ WHITESPACE = _{ " " | "\t" | "\r" }
 single_line_comment = @{ "#" ~ (!NEWLINE ~ ANY)* ~ &NEWLINE }
 multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ "'''" }
 COMMENT = _{ multi_line_comment | single_line_comment }
-keyword = { "true" | "false" | "nil" | "is" | "and" | "or" | "not" | "end" }
+keyword = { "true" | "false" | "nil" | "is" | "isnt" | "and" | "or" | "not" | "end" }
 
 // Numbers
 nat = @{ ASCII_DIGIT+ }
@@ -26,7 +26,7 @@ ident = { !keyword ~ ident_inner | "_" }
 // Operators
 op_as = { "+" | "-" }
 op_mdr = { "*" | "/" | "%" }
-op_comp = { "<=" | ">=" | "<" | ">" }
+op_comp = { "isnt" | "is" | "<=" | ">=" | "<" | ">" }
 op_and = { "and" }
 op_or = { "or" }
 op_not = { "not" }
@@ -46,8 +46,7 @@ expr_not = { op_not? ~ expr_call }
 expr_mdr = { expr_not ~ (op_mdr ~ expr_not)* }
 expr_as = { expr_mdr ~ (op_as ~ expr_mdr)* }
 expr_cmp = { expr_as ~ (op_comp ~ expr_as)* }
-expr_is = { expr_cmp ~ ("is" ~ (param | expr_cmp))* }
-expr_and = { expr_is ~ (NEWLINE? ~ op_and ~ NEWLINE? ~ expr_is)* }
+expr_and = { expr_cmp ~ (NEWLINE? ~ op_and ~ NEWLINE? ~ expr_cmp)* }
 expr_or = { expr_and ~ (NEWLINE? ~ op_or ~ NEWLINE? ~ expr_and)* }
 expr = { expr_or }
 

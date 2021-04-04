@@ -224,40 +224,7 @@ pub enum OpMDR {
 
 pub type Expression<'a> = ExprOr<'a>;
 pub type ExprOr<'a> = BinExpr<OpOr, ExprAnd<'a>>;
-pub type ExprAnd<'a> = BinExpr<OpAnd, ExprIs<'a>>;
-
-#[derive(Debug, Display, Clone, PartialEq)]
-pub enum IsRight<'a> {
-    Pattern(Param<'a>),
-    Expression(ExprCmp<'a>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprIs<'a> {
-    pub left: ExprCmp<'a>,
-    pub right: Option<IsRight<'a>>,
-}
-
-impl<'a> fmt::Display for ExprIs<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.left)?;
-        if let Some(right) = &self.right {
-            write!(f, " is {}", right)?;
-        }
-        Ok(())
-    }
-}
-
-impl<'a> Node for ExprIs<'a> {
-    type Child = ExprCmp<'a>;
-    fn wrapping(child: Self::Child) -> Self {
-        ExprIs {
-            left: child,
-            right: None,
-        }
-    }
-}
-
+pub type ExprAnd<'a> = BinExpr<OpAnd, ExprCmp<'a>>;
 pub type ExprCmp<'a> = BinExpr<OpCmp, ExprAS<'a>>;
 pub type ExprAS<'a> = BinExpr<OpAS, ExprMDR<'a>>;
 pub type ExprMDR<'a> = BinExpr<OpMDR, ExprNot<'a>>;

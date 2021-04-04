@@ -130,36 +130,20 @@ fn parse_expr_and(pair: Pair<Rule>) -> ParseResult<ExprAnd> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
-    let left = parse_expr_is(left)?;
+    let left = parse_expr_cmp(left)?;
     let mut rights = Vec::new();
     for (op, right) in pairs.tuples() {
         let op = match op.as_str() {
             "and" => OpAnd,
             rule => unreachable!("{:?}", rule),
         };
-        let right = parse_expr_is(right)?;
+        let right = parse_expr_cmp(right)?;
         rights.push(Right { op, expr: right });
     }
     Ok(ExprAnd {
         left: left.into(),
         rights,
     })
-}
-
-fn parse_expr_is(pair: Pair<Rule>) -> ParseResult<ExprIs> {
-    debug_pair!(pair);
-    let mut pairs = pair.into_inner();
-    let left = parse_expr_cmp(pairs.next().unwrap())?;
-    let right = if let Some(pair) = pairs.next() {
-        Some(match pair.as_rule() {
-            Rule::expr_cmp => IsRight::Expression(parse_expr_cmp(pair)?),
-            Rule::param => IsRight::Pattern(parse_param(pair)),
-            rule => unreachable!("{:?}", rule),
-        })
-    } else {
-        None
-    };
-    Ok(ExprIs { left, right })
 }
 
 fn parse_expr_cmp(pair: Pair<Rule>) -> ParseResult<ExprCmp> {
@@ -278,8 +262,8 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
         chained_call.args.insert(
             0,
             Term::wrapping(Items::wrapping(Item::wrapping(ExprOr::wrapping(
-                ExprAnd::wrapping(ExprIs::wrapping(ExprCmp::wrapping(ExprAS::wrapping(
-                    ExprMDR::wrapping(ExprNot::wrapping(call)),
+                ExprAnd::wrapping(ExprCmp::wrapping(ExprAS::wrapping(ExprMDR::wrapping(
+                    ExprNot::wrapping(call),
                 )))),
             )))),
         );

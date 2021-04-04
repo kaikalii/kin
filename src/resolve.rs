@@ -176,17 +176,6 @@ impl<'a> Resolve<'a> for ExprAnd<'a> {
     }
 }
 
-impl<'a> Resolve<'a> for ExprIs<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.left.resolve(res);
-        match &mut self.right {
-            Some(IsRight::Expression(expr)) => expr.resolve(res),
-            Some(IsRight::Pattern(param)) => param.resolve(res),
-            _ => {}
-        }
-    }
-}
-
 impl<'a> Resolve<'a> for ExprCmp<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.left.resolve(res);
