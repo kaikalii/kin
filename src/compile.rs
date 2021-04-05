@@ -37,8 +37,8 @@ impl<'a> CTarget<'a> {
             res: Resolver::new(),
             name: name.into(),
             main,
-            header_includes: once("value.h".into()).collect(),
-            source_includes: once("value.h".into()).collect(),
+            header_includes: once("noot.h".into()).collect(),
+            source_includes: once("noot.h".into()).collect(),
             other_includes: once("utf8.h".into()).collect(),
             block_vals: VecDeque::new(),
             functions,
@@ -145,36 +145,6 @@ impl<'a> CTarget<'a> {
             node => todo!("{:?}", node),
         }
     }
-    pub fn compile_term(&mut self, term: Term<'a>) -> String {
-        match term {
-            Term::Nat(i) => format!("new_nat({})", i),
-            Term::Int(i) => format!("new_int({})", i),
-            Term::Real(i) => format!("new_real({})", i),
-            Term::Ident(ident) => match self.res.find_def(&ident.name).cloned() {
-                Some(def) => match def {
-                    CompileDef::C(name) => format!("new_function(&{})", name),
-                    CompileDef::Noot(def) => def.ident.name,
-                },
-                None => {
-                    self.res.errors.push(
-                        ResolutionErrorKind::UnknownDef(ident.name.clone())
-                            .span(ident.span.clone()),
-                    );
-                    String::new()
-                }
-            },
-            Term::Closure(_) => {
-                self.res.push_scope();
-                self.res.pop_scope();
-                todo!()
-            }
-            Term::Expr(items) => {
-                self.compile_items(items, true);
-                self.block_vals.pop_front().unwrap()
-            }
-            term => todo!("{:?}", term),
-        }
-    }
     #[must_use]
     pub fn compile_bin_expr(&mut self, expr: BinExpr<'a>) -> String {
         let noot_fn = match expr.op {
@@ -206,5 +176,36 @@ impl<'a> CTarget<'a> {
             args += &self.compile_node(node);
         }
         format!("noot_call({}, {}, (NootValue[]){{{}}})", f, arg_count, args)
+    }
+    pub fn compile_term(&mut self, term: Term<'a>) -> String {
+        match term {
+            Term::Nat(i) => format!("new_nat({})", i),
+            Term::Int(i) => format!("new_int({})", i),
+            Term::Real(i) => format!("new_real({})", i),
+            Term::String(s) => format!("new_string({:?}, {})", s, s.len()),
+            Term::Ident(ident) => match self.res.find_def(&ident.name).cloned() {
+                Some(def) => match def {
+                    CompileDef::C(name) => format!("new_function(&{})", name),
+                    CompileDef::Noot(def) => def.ident.name,
+                },
+                None => {
+                    self.res.errors.push(
+                        ResolutionErrorKind::UnknownDef(ident.name.clone())
+                            .span(ident.span.clone()),
+                    );
+                    String::new()
+                }
+            },
+            Term::Closure(_) => {
+                self.res.push_scope();
+                self.res.pop_scope();
+                todo!()
+            }
+            Term::Expr(items) => {
+                self.compile_items(items, true);
+                self.block_vals.pop_front().unwrap()
+            }
+            term => todo!("{:?}", term),
+        }
     }
 }
