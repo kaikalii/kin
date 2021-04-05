@@ -2,6 +2,7 @@
 #define NOOT_VALUE_H
 
 #include <stdio.h>
+#include <math.h>
 #include "utf8.h"
 
 typedef void* NootString;
@@ -103,5 +104,96 @@ NootValue noot_add(NootValue a, NootValue b) {
     }
 }
 
+NootValue noot_sub(NootValue a, NootValue b) {
+    switch (a.type) {
+        case Nat:
+            switch (b.type) {
+                case Nat: return new_nat(a.data.Nat - b.data.Nat);
+                case Int: return new_int(a.data.Nat - b.data.Int);
+                case Real: return new_real(a.data.Nat - b.data.Real);
+            }
+        case Int:
+            switch (b.type) {
+                case Nat: return new_int(a.data.Int - b.data.Nat);
+                case Int: return new_int(a.data.Int - b.data.Int);
+                case Real: return new_real(a.data.Int - b.data.Real);
+            }
+        case Real:
+            switch (b.type) {
+                case Nat: return new_real(a.data.Real - b.data.Nat);
+                case Int: return new_real(a.data.Real - b.data.Int);
+                case Real: return new_real(a.data.Real - b.data.Real);
+            }
+    }
+}
+
+NootValue noot_mul(NootValue a, NootValue b) {
+    switch (a.type) {
+        case Nat:
+            switch (b.type) {
+                case Nat: return new_nat(a.data.Nat * b.data.Nat);
+                case Int: return new_int(a.data.Nat * b.data.Int);
+                case Real: return new_real(a.data.Nat * b.data.Real);
+            }
+        case Int:
+            switch (b.type) {
+                case Nat: return new_int(a.data.Int * b.data.Nat);
+                case Int: return new_int(a.data.Int * b.data.Int);
+                case Real: return new_real(a.data.Int * b.data.Real);
+            }
+        case Real:
+            switch (b.type) {
+                case Nat: return new_real(a.data.Real * b.data.Nat);
+                case Int: return new_real(a.data.Real * b.data.Int);
+                case Real: return new_real(a.data.Real * b.data.Real);
+            }
+    }
+}
+
+NootValue noot_div(NootValue a, NootValue b) {
+    switch (a.type) {
+        case Nat:
+            switch (b.type) {
+                case Nat: return new_nat(a.data.Nat / b.data.Nat);
+                case Int: return new_int(a.data.Nat / b.data.Int);
+                case Real: return new_real(a.data.Nat / b.data.Real);
+            }
+        case Int:
+            switch (b.type) {
+                case Nat: return new_int(a.data.Int / b.data.Nat);
+                case Int: return new_int(a.data.Int / b.data.Int);
+                case Real: return new_real(a.data.Int / b.data.Real);
+            }
+        case Real:
+            switch (b.type) {
+                case Nat: return new_real(a.data.Real / b.data.Nat);
+                case Int: return new_real(a.data.Real / b.data.Int);
+                case Real: return new_real(a.data.Real / b.data.Real);
+            }
+    }
+}
+
+NootValue noot_rem(NootValue a, NootValue b) {
+    switch (a.type) {
+        case Nat:
+            switch (b.type) {
+                case Nat: return new_nat(a.data.Nat % b.data.Nat);
+                case Int: return new_int(a.data.Nat % b.data.Int);
+                case Real: return new_real(fmod(a.data.Nat, b.data.Real));
+            }
+        case Int:
+            switch (b.type) {
+                case Nat: return new_int(a.data.Int % b.data.Nat);
+                case Int: return new_int(a.data.Int % b.data.Int);
+                case Real: return new_real(fmod(a.data.Int, b.data.Real));
+            }
+        case Real:
+            switch (b.type) {
+                case Nat: return new_real(fmod(a.data.Real, b.data.Nat));
+                case Int: return new_real(fmod(a.data.Real, b.data.Int));
+                case Real: return new_real(fmod(a.data.Real, b.data.Real));
+            }
+    }
+}
 
 #endif
