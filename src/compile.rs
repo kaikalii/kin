@@ -131,11 +131,12 @@ impl<'a> CTarget<'a> {
     pub fn compile_def(&mut self, def: Def<'a>) {
         // Push a scope for this def
         self.res.push_scope();
+        let c_name = self.res.c_name_for(&def.ident.name);
         if def.params.params.is_empty() {
             // Variable
             self.compile_items(def.items.clone(), true);
             let expr = self.block_vals.pop_front().unwrap();
-            *self.body() += &format!("NootValue {} = {};\n", def.ident.name, expr);
+            *self.body() += &format!("NootValue {} = {};\n", c_name, expr);
         } else {
             // Function
             let mut params = String::new();
@@ -145,9 +146,9 @@ impl<'a> CTarget<'a> {
                 }
                 params += "NootValue ";
                 params += &param.ident.name;
-                self.res.push_def(&param.ident.name, CompileDef::Param(i));
+                self.res.push_param_def(&param.ident.name, i);
             }
-            let sig = format!("NootValue {}(int count, NootValue* args)", def.ident.name);
+            let sig = format!("NootValue {}(int count, NootValue* args)", c_name);
             self.curr_function.push(self.functions.len());
             self.functions.push(CFunction {
                 sig,
@@ -161,8 +162,7 @@ impl<'a> CTarget<'a> {
         // Pop the def's scope
         self.res.pop_scope();
         // Push the def into its enclosing scope
-        self.res
-            .push_def(def.ident.name.clone(), CompileDef::Noot(def));
+        self.res.push_noot_def(c_name, def);
     }
     #[must_use]
     pub fn compile_node(&mut self, node: Node<'a>) -> String {
@@ -214,11 +214,11 @@ impl<'a> CTarget<'a> {
             Term::Ident(ident) => match self.res.find_def(&ident.name).cloned() {
                 Some(def) => match def {
                     CompileDef::C(name) => format!("new_function(&{})", name),
-                    CompileDef::Noot(def) => {
+                    CompileDef::Noot { name, def } => {
                         if def.params.params.is_empty() {
-                            def.ident.name
+                            name
                         } else {
-                            format!("new_function(&{})", def.ident.name)
+                            format!("new_function(&{})", name)
                         }
                     }
                     CompileDef::Param(i) => format!("args[{}]", i),

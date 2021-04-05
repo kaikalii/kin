@@ -1,5 +1,4 @@
 #![allow(unstable_name_collisions)]
-#![allow(dead_code)]
 
 mod ast;
 mod compile;
