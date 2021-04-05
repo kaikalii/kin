@@ -4,13 +4,13 @@
 #include <math.h>
 #include <stdio.h>
 #include "utf8.h"
+#include "tgc.h"
 
 typedef unsigned char byte;
 
 typedef struct NootString {
     byte* s;
     size_t len;
-    unsigned ref_count;
 } NootString;
 
 typedef enum NootType {
@@ -68,11 +68,11 @@ NootValue new_function(NootFn f) {
 }
 
 NootString new_noot_string(byte* s, size_t len) {
-    NootString rcs = {
+    NootString string = {
         .s = s,
-        .ref_count = 1,
+        .len = len,
     };
-    return rcs;
+    return string;
 }
 
 NootValue new_string(byte* s, size_t len) {

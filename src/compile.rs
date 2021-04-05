@@ -12,7 +12,7 @@ pub struct CTarget<'a> {
     pub name: String,
     pub header_includes: HashSet<String>,
     pub source_includes: HashSet<String>,
-    pub other_includes: HashSet<String>,
+    pub other_c_lib_files: HashSet<String>,
     pub functions: Vec<CFunction>,
     pub curr_function: Vec<usize>,
     pub block_vals: VecDeque<String>,
@@ -43,7 +43,9 @@ impl<'a> CTarget<'a> {
             main,
             header_includes: once("noot.h".into()).collect(),
             source_includes: once("noot.h".into()).collect(),
-            other_includes: once("utf8.h".into()).collect(),
+            other_c_lib_files: vec!["utf8".into(), "tgc.h".into(), "tgc.c".into()]
+                .into_iter()
+                .collect(),
             block_vals: VecDeque::new(),
             functions,
             curr_function,
@@ -54,7 +56,7 @@ impl<'a> CTarget<'a> {
         let mut to_copy = Vec::new();
         to_copy.extend(&self.header_includes);
         to_copy.extend(&self.source_includes);
-        to_copy.extend(&self.other_includes);
+        to_copy.extend(&self.other_c_lib_files);
         for file_name in to_copy {
             fs::copy(
                 format!("clibs/{}", file_name),
