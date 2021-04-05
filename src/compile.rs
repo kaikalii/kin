@@ -14,6 +14,7 @@ pub struct CTarget<'a> {
     pub source_includes: HashSet<String>,
     pub other_includes: HashSet<String>,
     pub functions: Vec<CFunction>,
+    pub curr_function: Vec<usize>,
     pub block_vals: VecDeque<String>,
     pub main: bool,
 }
@@ -25,13 +26,16 @@ pub struct CFunction {
 
 impl<'a> CTarget<'a> {
     pub fn new(name: &str, main: bool) -> Self {
-        let functions = if main {
-            vec![CFunction {
-                sig: "int main()".into(),
-                body: String::new(),
-            }]
+        let (functions, curr_function) = if main {
+            (
+                vec![CFunction {
+                    sig: "int main()".into(),
+                    body: String::new(),
+                }],
+                vec![0],
+            )
         } else {
-            Vec::new()
+            (Vec::new(), Vec::new())
         };
         CTarget {
             res: Resolver::new(),
@@ -42,6 +46,7 @@ impl<'a> CTarget<'a> {
             other_includes: once("utf8.h".into()).collect(),
             block_vals: VecDeque::new(),
             functions,
+            curr_function,
         }
     }
     pub fn write(self) -> io::Result<()> {
@@ -80,17 +85,22 @@ impl<'a> CTarget<'a> {
         writeln!(source)?;
 
         // Write functions
-        for function in self.functions {
+        // Write declarations
+        for function in &self.functions {
             if let Some(header) = &mut header {
                 writeln!(header, "{};", function.sig)?;
             } else {
                 writeln!(source, "{};", function.sig)?;
             }
+        }
+        writeln!(source)?;
+        // Write definitions
+        for function in &self.functions {
             writeln!(source, "{} {{", function.sig)?;
             for line in function.body.lines() {
                 writeln!(source, "    {}", line)?;
             }
-            writeln!(source, "}}")?;
+            writeln!(source, "}}\n")?;
         }
 
         Ok(())
@@ -116,7 +126,7 @@ impl<'a> CTarget<'a> {
         }
     }
     fn body(&mut self) -> &mut String {
-        &mut self.functions.last_mut().expect("No function").body
+        &mut self.functions[*self.curr_function.last().unwrap()].body
     }
     pub fn compile_def(&mut self, def: Def<'a>) {
         // Push a scope for this def
@@ -128,7 +138,25 @@ impl<'a> CTarget<'a> {
             *self.body() += &format!("NootValue {} = {};\n", def.ident.name, expr);
         } else {
             // Function
-            todo!("functions")
+            let mut params = String::new();
+            for (i, param) in def.params.params.iter().enumerate() {
+                if i > 0 {
+                    params += ", ";
+                }
+                params += "NootValue ";
+                params += &param.ident.name;
+                self.res.push_def(&param.ident.name, CompileDef::Param(i));
+            }
+            let sig = format!("NootValue {}(int count, NootValue* args)", def.ident.name);
+            self.curr_function.push(self.functions.len());
+            self.functions.push(CFunction {
+                sig,
+                body: String::new(),
+            });
+            self.compile_items(def.items.clone(), true);
+            let ret = self.block_vals.pop_front().unwrap();
+            *self.body() += &format!("return {};", ret);
+            self.curr_function.pop();
         }
         // Pop the def's scope
         self.res.pop_scope();
@@ -186,7 +214,14 @@ impl<'a> CTarget<'a> {
             Term::Ident(ident) => match self.res.find_def(&ident.name).cloned() {
                 Some(def) => match def {
                     CompileDef::C(name) => format!("new_function(&{})", name),
-                    CompileDef::Noot(def) => def.ident.name,
+                    CompileDef::Noot(def) => {
+                        if def.params.params.is_empty() {
+                            def.ident.name
+                        } else {
+                            format!("new_function(&{})", def.ident.name)
+                        }
+                    }
+                    CompileDef::Param(i) => format!("args[{}]", i),
                 },
                 None => {
                     self.res.errors.push(

@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-};
+use std::{collections::HashMap, fmt};
 
 use pest::{
     error::{Error as PestError, ErrorVariant},
@@ -50,13 +47,13 @@ pub struct Resolver<'a> {
 #[derive(Default)]
 pub struct Scope<'a> {
     pub defs: HashMap<String, Vec<CompileDef<'a>>>,
-    pub param_defs: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
 pub enum CompileDef<'a> {
     Noot(Def<'a>),
     C(&'static str),
+    Param(usize),
 }
 
 impl<'a> Resolver<'a> {
@@ -81,7 +78,7 @@ impl<'a> Resolver<'a> {
         self.scopes
             .iter()
             .rev()
-            .any(|scope| scope.defs.contains_key(name) || scope.param_defs.contains(name))
+            .any(|scope| scope.defs.contains_key(name))
     }
     pub fn push_def<N>(&mut self, name: N, def: CompileDef<'a>)
     where
@@ -94,16 +91,6 @@ impl<'a> Resolver<'a> {
             .entry(name.into())
             .or_default()
             .push(def);
-    }
-    pub fn push_param_def<N>(&mut self, name: N)
-    where
-        N: Into<String>,
-    {
-        self.scopes
-            .last_mut()
-            .unwrap()
-            .param_defs
-            .insert(name.into());
     }
     pub fn push_scope(&mut self) {
         self.scopes.push(Scope::default());
