@@ -237,8 +237,8 @@ fn _expression_size() {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprCall<'a> {
-    pub term: Term<'a>,
-    pub args: Vec<Term<'a>>,
+    pub expr: ExprInsert<'a>,
+    pub args: Vec<ExprInsert<'a>>,
     pub chained: Option<String>,
 }
 
@@ -254,7 +254,7 @@ impl<'a> fmt::Display for ExprCall<'a> {
                     "{}{}{} {}",
                     &prev[1..prev.len() - 1],
                     sep,
-                    self.term,
+                    self.expr,
                     self.args
                         .iter()
                         .skip(1)
@@ -267,7 +267,7 @@ impl<'a> fmt::Display for ExprCall<'a> {
                 write!(
                     f,
                     "{}{}{}",
-                    self.term,
+                    self.expr,
                     if self.args.is_empty() { "" } else { " " },
                     self.args
                         .iter()
@@ -284,12 +284,55 @@ impl<'a> fmt::Display for ExprCall<'a> {
 }
 
 impl<'a> Node for ExprCall<'a> {
-    type Child = Term<'a>;
+    type Child = ExprInsert<'a>;
     fn wrapping(child: Self::Child) -> Self {
         ExprCall {
-            term: child,
+            expr: child,
             args: Vec::new(),
             chained: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Insertion<'a> {
+    pub ident: String,
+    pub term: Term<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprInsert<'a> {
+    pub term: Term<'a>,
+    pub insertions: Vec<Insertion<'a>>,
+}
+
+impl<'a> fmt::Display for ExprInsert<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.term)?;
+        match self.insertions.len() {
+            0 => {}
+            1 => write!(
+                f,
+                " :{} {}",
+                self.insertions[0].ident, self.insertions[0].term
+            )?,
+            _ => {
+                for ins in &self.insertions {
+                    write!(f, "\n    :{} {}", ins.ident, ins.term)?;
+                }
+                write!(f, "\nend")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<'a> Node for ExprInsert<'a> {
+    type Child = Term<'a>;
+    fn wrapping(child: Self::Child) -> Self {
+        ExprInsert {
+            term: child,
+            insertions: Vec::new(),
         }
     }
 }

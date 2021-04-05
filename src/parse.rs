@@ -240,14 +240,14 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
         match pair.as_rule() {
             Rule::expr_call_single => {
                 let mut pairs = pair.into_inner();
-                let term = parse_term(pairs.next().unwrap())?;
+                let expr = parse_expr_insert(pairs.next().unwrap())?;
                 let mut args = Vec::new();
                 for pair in pairs {
-                    let arg = parse_term(pair)?;
+                    let arg = parse_expr_insert(pair)?;
                     args.push(arg);
                 }
                 calls.push(ExprCall {
-                    term,
+                    expr,
                     args,
                     chained: chained.take(),
                 });
@@ -261,15 +261,46 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
     for mut chained_call in calls {
         chained_call.args.insert(
             0,
-            Term::wrapping(Items::wrapping(Item::wrapping(ExprOr::wrapping(
-                ExprAnd::wrapping(ExprCmp::wrapping(ExprAS::wrapping(ExprMDR::wrapping(
-                    ExprNot::wrapping(call),
+            ExprInsert::wrapping(Term::wrapping(Items::wrapping(Item::wrapping(
+                ExprOr::wrapping(ExprAnd::wrapping(ExprCmp::wrapping(ExprAS::wrapping(
+                    ExprMDR::wrapping(ExprNot::wrapping(call)),
                 )))),
             )))),
         );
         call = chained_call;
     }
     Ok(call)
+}
+
+fn parse_expr_insert(pair: Pair<Rule>) -> ParseResult<ExprInsert> {
+    debug_pair!(pair);
+    let mut pairs = pair.into_inner();
+    let term = parse_term(pairs.next().unwrap())?;
+    let mut insertions = Vec::new();
+    let mut curr_ident: Option<Ident> = None;
+    for pair in pairs {
+        match pair.as_rule() {
+            Rule::ident => {
+                if let Some(ident) = curr_ident.take() {
+                    insertions.push(Insertion {
+                        ident: ident.name.clone(),
+                        term: Term::Ident(ident),
+                    })
+                }
+                curr_ident = Some(parse_ident(pair));
+            }
+            Rule::term => {
+                let ident = curr_ident.take().unwrap();
+                let term = parse_term(pair)?;
+                insertions.push(Insertion {
+                    ident: ident.name,
+                    term,
+                });
+            }
+            rule => unreachable!("{:?}", rule),
+        }
+    }
+    Ok(ExprInsert { term, insertions })
 }
 
 fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {

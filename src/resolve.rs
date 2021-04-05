@@ -211,9 +211,18 @@ impl<'a> Resolve<'a> for ExprNot<'a> {
 
 impl<'a> Resolve<'a> for ExprCall<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.term.resolve(res);
+        self.expr.resolve(res);
         for arg in &mut self.args {
             arg.resolve(res);
+        }
+    }
+}
+
+impl<'a> Resolve<'a> for ExprInsert<'a> {
+    fn resolve(&mut self, res: &mut Resolver<'a>) {
+        self.term.resolve(res);
+        for ins in &mut self.insertions {
+            ins.term.resolve(res);
         }
     }
 }
