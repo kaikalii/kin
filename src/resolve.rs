@@ -158,58 +158,32 @@ impl<'a> Resolve<'a> for Def<'a> {
     }
 }
 
-impl<'a> Resolve<'a> for ExprOr<'a> {
+impl<'a> Resolve<'a> for Node<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.left.resolve(res);
-        for right in &mut self.rights {
-            right.expr.resolve(res);
+        match self {
+            Node::Term(term) => term.resolve(res),
+            Node::BinExpr(expr) => expr.resolve(res),
+            Node::UnExpr(expr) => expr.resolve(res),
+            Node::Call(expr) => expr.resolve(res),
+            Node::Insert(expr) => expr.resolve(res),
         }
     }
 }
 
-impl<'a> Resolve<'a> for ExprAnd<'a> {
+impl<'a> Resolve<'a> for BinExpr<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.left.resolve(res);
-        for right in &mut self.rights {
-            right.expr.resolve(res);
-        }
+        self.right.resolve(res);
     }
 }
 
-impl<'a> Resolve<'a> for ExprCmp<'a> {
+impl<'a> Resolve<'a> for UnExpr<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.left.resolve(res);
-        for right in &mut self.rights {
-            right.expr.resolve(res);
-        }
+        self.inner.resolve(res);
     }
 }
 
-impl<'a> Resolve<'a> for ExprAS<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.left.resolve(res);
-        for right in &mut self.rights {
-            right.expr.resolve(res);
-        }
-    }
-}
-
-impl<'a> Resolve<'a> for ExprMDR<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.left.resolve(res);
-        for right in &mut self.rights {
-            right.expr.resolve(res);
-        }
-    }
-}
-
-impl<'a> Resolve<'a> for ExprNot<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.expr.resolve(res);
-    }
-}
-
-impl<'a> Resolve<'a> for ExprCall<'a> {
+impl<'a> Resolve<'a> for CallExpr<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.expr.resolve(res);
         for arg in &mut self.args {
@@ -218,7 +192,7 @@ impl<'a> Resolve<'a> for ExprCall<'a> {
     }
 }
 
-impl<'a> Resolve<'a> for ExprInsert<'a> {
+impl<'a> Resolve<'a> for InsertExpr<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
         self.term.resolve(res);
         for ins in &mut self.insertions {

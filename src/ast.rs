@@ -27,20 +27,13 @@ impl<'a> fmt::Display for Ident<'a> {
     }
 }
 
-#[derive(Debug, Display, Clone, PartialEq)]
+#[derive(Debug, Display, Clone)]
 pub enum Item<'a> {
-    Expression(Expression<'a>),
+    Expression(Node<'a>),
     Def(Def<'a>),
 }
 
-impl<'a> Node for Item<'a> {
-    type Child = Expression<'a>;
-    fn wrapping(child: Self::Child) -> Self {
-        Item::Expression(child)
-    }
-}
-
-#[derive(Debug, Display, Clone, PartialEq)]
+#[derive(Debug, Display, Clone)]
 #[display(
     fmt = "{}",
     r#"items.iter().map(ToString::to_string).intersperse("\n\n".into()).collect::<String>()"#
@@ -49,14 +42,7 @@ pub struct Items<'a> {
     pub items: Vec<Item<'a>>,
 }
 
-impl<'a> Node for Items<'a> {
-    type Child = Item<'a>;
-    fn wrapping(child: Self::Child) -> Self {
-        Items { items: vec![child] }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Param<'a> {
     pub ident: Ident<'a>,
 }
@@ -67,7 +53,7 @@ impl<'a> fmt::Display for Param<'a> {
     }
 }
 
-#[derive(Debug, Display, Clone, PartialEq)]
+#[derive(Debug, Display, Clone)]
 #[display(
     fmt = "{}",
     r#"params.iter().map(ToString::to_string).intersperse(" ".into()).collect::<String>()"#
@@ -76,7 +62,7 @@ pub struct Params<'a> {
     pub params: Vec<Param<'a>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Def<'a> {
     pub ident: Ident<'a>,
     pub params: Params<'a>,
@@ -101,148 +87,131 @@ impl<'a> fmt::Display for Def<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BinExpr<O, T> {
-    pub left: Box<T>,
-    pub rights: Vec<Right<O, T>>,
+#[derive(Debug, Clone)]
+pub enum Node<'a> {
+    Term(Term<'a>),
+    BinExpr(BinExpr<'a>),
+    UnExpr(UnExpr<'a>),
+    Call(CallExpr<'a>),
+    Insert(InsertExpr<'a>),
 }
 
-impl<O, T> BinExpr<O, T> {
-    pub fn new(left: T, rights: Vec<Right<O, T>>) -> Self {
-        BinExpr {
-            left: Box::new(left),
-            rights,
-        }
-    }
-}
-
-impl<O, T> fmt::Display for BinExpr<O, T>
-where
-    O: fmt::Display,
-    T: fmt::Display,
-{
+impl<'a> fmt::Display for Node<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.left)?;
-        for right in &self.rights {
-            write!(f, " {} {}", right.op, right.expr)?;
-        }
-        Ok(())
-    }
-}
-
-pub trait Node {
-    type Child;
-    fn wrapping(child: Self::Child) -> Self;
-}
-
-impl<O, T> Node for BinExpr<O, T>
-where
-    T: Node,
-{
-    type Child = T;
-    fn wrapping(child: Self::Child) -> Self {
-        BinExpr::new(child, Vec::new())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Right<O, T> {
-    pub op: O,
-    pub expr: T,
-}
-
-impl<O, T> Right<O, T> {
-    pub fn new(op: O, expr: T) -> Self {
-        Right { op, expr }
-    }
-}
-
-#[derive(Debug, Display, Clone, PartialEq, Eq)]
-#[display(fmt = "{}{}", r#"if op.is_some() { "not " } else { "" }"#, expr)]
-pub struct UnExpr<O, T> {
-    pub op: Option<O>,
-    pub expr: T,
-}
-
-impl<O, T> Node for UnExpr<O, T>
-where
-    T: Node,
-    O: Default,
-{
-    type Child = T;
-    fn wrapping(child: Self::Child) -> Self {
-        UnExpr {
-            op: None,
-            expr: child,
+        match self {
+            Node::Term(term) => term.fmt(f),
+            Node::BinExpr(expr) => expr.fmt(f),
+            Node::UnExpr(expr) => expr.fmt(f),
+            Node::Call(expr) => expr.fmt(f),
+            Node::Insert(expr) => expr.fmt(f),
         }
     }
 }
 
-#[derive(Debug, Display, Clone, PartialEq, Eq, Default)]
-#[display(fmt = "or")]
-pub struct OpOr;
-#[derive(Debug, Display, Clone, PartialEq, Eq, Default)]
-#[display(fmt = "and")]
-pub struct OpAnd;
-#[derive(Debug, Display, Clone, PartialEq, Eq, Default)]
-#[display(fmt = "not")]
-pub struct OpNot;
+#[derive(Debug, Clone)]
+pub struct BinExpr<'a> {
+    pub left: Box<Node<'a>>,
+    pub right: Box<Node<'a>>,
+    pub op: BinOp,
+}
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
-pub enum OpCmp {
-    #[display(fmt = "is")]
+impl<'a> BinExpr<'a> {
+    pub fn new(left: Node<'a>, right: Node<'a>, op: BinOp) -> Self {
+        BinExpr {
+            left: left.into(),
+            right: right.into(),
+            op,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum BinOp {
+    Or,
+    And,
     Is,
-    #[display(fmt = "isnt")]
     Isnt,
-    #[display(fmt = "<")]
     Less,
-    #[display(fmt = ">")]
-    Greater,
-    #[display(fmt = "<=")]
     LessOrEqual,
-    #[display(fmt = ">=")]
+    Greater,
     GreaterOrEqual,
-}
-
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
-pub enum OpAS {
-    #[display(fmt = "+")]
     Add,
-    #[display(fmt = "-")]
     Sub,
-}
-
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
-pub enum OpMDR {
-    #[display(fmt = "*")]
     Mul,
-    #[display(fmt = "/")]
     Div,
-    #[display(fmt = "%")]
     Rem,
 }
 
-pub type Expression<'a> = ExprOr<'a>;
-pub type ExprOr<'a> = BinExpr<OpOr, ExprAnd<'a>>;
-pub type ExprAnd<'a> = BinExpr<OpAnd, ExprCmp<'a>>;
-pub type ExprCmp<'a> = BinExpr<OpCmp, ExprAS<'a>>;
-pub type ExprAS<'a> = BinExpr<OpAS, ExprMDR<'a>>;
-pub type ExprMDR<'a> = BinExpr<OpMDR, ExprNot<'a>>;
-pub type ExprNot<'a> = UnExpr<OpNot, ExprCall<'a>>;
-
-fn _expression_size() {
-    #[allow(invalid_value)]
-    let _: [u8; 32] = unsafe { std::mem::transmute::<Expression, _>(std::mem::zeroed()) };
+impl<'a> fmt::Display for BinExpr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {} {}", self.left, self.op, self.right)
+    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprCall<'a> {
-    pub expr: ExprInsert<'a>,
-    pub args: Vec<ExprInsert<'a>>,
+impl fmt::Display for BinOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BinOp::Or => "or".fmt(f),
+            BinOp::And => "and".fmt(f),
+            BinOp::Is => "is".fmt(f),
+            BinOp::Isnt => "isnt".fmt(f),
+            BinOp::Less => "<".fmt(f),
+            BinOp::LessOrEqual => "<=".fmt(f),
+            BinOp::Greater => ">".fmt(f),
+            BinOp::GreaterOrEqual => ">=".fmt(f),
+            BinOp::Add => "+".fmt(f),
+            BinOp::Sub => "-".fmt(f),
+            BinOp::Mul => "*".fmt(f),
+            BinOp::Div => "/".fmt(f),
+            BinOp::Rem => "%".fmt(f),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UnExpr<'a> {
+    pub inner: Box<Node<'a>>,
+    pub op: UnOp,
+}
+
+impl<'a> UnExpr<'a> {
+    pub fn new(inner: Node<'a>, op: UnOp) -> Self {
+        UnExpr {
+            inner: inner.into(),
+            op,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum UnOp {
+    Not,
+    Neg,
+}
+
+impl<'a> fmt::Display for UnExpr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}{}", self.op, self.inner)
+    }
+}
+
+impl fmt::Display for UnOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            UnOp::Not => "not ".fmt(f),
+            UnOp::Neg => '-'.fmt(f),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CallExpr<'a> {
+    pub expr: Box<Node<'a>>,
+    pub args: Vec<Node<'a>>,
     pub chained: Option<String>,
 }
 
-impl<'a> fmt::Display for ExprCall<'a> {
+impl<'a> fmt::Display for CallExpr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         #[cfg(feature = "debug")]
         write!(f, "{{")?;
@@ -283,30 +252,19 @@ impl<'a> fmt::Display for ExprCall<'a> {
     }
 }
 
-impl<'a> Node for ExprCall<'a> {
-    type Child = ExprInsert<'a>;
-    fn wrapping(child: Self::Child) -> Self {
-        ExprCall {
-            expr: child,
-            args: Vec::new(),
-            chained: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Insertion<'a> {
     pub ident: String,
     pub term: Term<'a>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprInsert<'a> {
+#[derive(Debug, Clone)]
+pub struct InsertExpr<'a> {
     pub term: Term<'a>,
     pub insertions: Vec<Insertion<'a>>,
 }
 
-impl<'a> fmt::Display for ExprInsert<'a> {
+impl<'a> fmt::Display for InsertExpr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.term)?;
         match self.insertions.len() {
@@ -327,20 +285,10 @@ impl<'a> fmt::Display for ExprInsert<'a> {
     }
 }
 
-impl<'a> Node for ExprInsert<'a> {
-    type Child = Term<'a>;
-    fn wrapping(child: Self::Child) -> Self {
-        ExprInsert {
-            term: child,
-            insertions: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Display, Clone, PartialEq)]
+#[derive(Debug, Display, Clone)]
 pub enum Term<'a> {
     #[display(fmt = "({})", _0)]
-    Expr(Box<Items<'a>>),
+    Expr(Items<'a>),
     #[display(fmt = "{}", "_0.to_string().blue()")]
     Nat(u64),
     #[display(fmt = "{}", "_0.to_string().blue()")]
@@ -358,14 +306,7 @@ pub enum Term<'a> {
     Nil,
 }
 
-impl<'a> Node for Term<'a> {
-    type Child = Items<'a>;
-    fn wrapping(child: Self::Child) -> Self {
-        Term::Expr(Box::new(child))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Closure<'a> {
     pub params: Params<'a>,
     pub body: Items<'a>,

@@ -87,7 +87,9 @@ fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
     let pair = pairs.next().unwrap();
     let items = match pair.as_rule() {
         Rule::items => parse_items(pair)?,
-        Rule::expr => Items::wrapping(Item::wrapping(parse_expr(pair)?)),
+        Rule::expr => Items {
+            items: vec![Item::Expression(parse_expr(pair)?)],
+        },
         rule => unreachable!("{:?}", rule),
     };
     Ok(Def {
@@ -97,7 +99,7 @@ fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
     })
 }
 
-fn parse_expr(pair: Pair<Rule>) -> ParseResult<Expression> {
+fn parse_expr(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let pair = only(pair);
     Ok(match pair.as_rule() {
@@ -106,132 +108,116 @@ fn parse_expr(pair: Pair<Rule>) -> ParseResult<Expression> {
     })
 }
 
-fn parse_expr_or(pair: Pair<Rule>) -> ParseResult<ExprOr> {
+fn parse_expr_or(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
-    let left = parse_expr_and(left)?;
-    let mut rights = Vec::new();
+    let mut left = parse_expr_and(left)?;
     for (op, right) in pairs.tuples() {
         let op = match op.as_str() {
-            "or" => OpOr,
+            "or" => BinOp::Or,
             rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_and(right)?;
-        rights.push(Right { op, expr: right });
+        left = Node::BinExpr(BinExpr::new(left, right, op));
     }
-    Ok(ExprOr {
-        left: left.into(),
-        rights,
-    })
+    Ok(left)
 }
 
-fn parse_expr_and(pair: Pair<Rule>) -> ParseResult<ExprAnd> {
+fn parse_expr_and(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
-    let left = parse_expr_cmp(left)?;
-    let mut rights = Vec::new();
+    let mut left = parse_expr_cmp(left)?;
     for (op, right) in pairs.tuples() {
         let op = match op.as_str() {
-            "and" => OpAnd,
+            "and" => BinOp::And,
             rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_cmp(right)?;
-        rights.push(Right { op, expr: right });
+        left = Node::BinExpr(BinExpr::new(left, right, op));
     }
-    Ok(ExprAnd {
-        left: left.into(),
-        rights,
-    })
+    Ok(left)
 }
 
-fn parse_expr_cmp(pair: Pair<Rule>) -> ParseResult<ExprCmp> {
+fn parse_expr_cmp(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
-    let left = parse_expr_as(left)?;
-    let mut rights = Vec::new();
+    let mut left = parse_expr_as(left)?;
     for (op, right) in pairs.tuples() {
         let op = match op.as_str() {
-            "is" => OpCmp::Is,
-            "isnt" => OpCmp::Isnt,
-            "<=" => OpCmp::LessOrEqual,
-            ">=" => OpCmp::GreaterOrEqual,
-            "<" => OpCmp::Less,
-            ">" => OpCmp::Greater,
+            "is" => BinOp::Is,
+            "isnt" => BinOp::Isnt,
+            "<=" => BinOp::LessOrEqual,
+            ">=" => BinOp::GreaterOrEqual,
+            "<" => BinOp::Less,
+            ">" => BinOp::Greater,
             rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_as(right)?;
-        rights.push(Right { op, expr: right });
+        left = Node::BinExpr(BinExpr::new(left, right, op));
     }
-    Ok(ExprCmp {
-        left: left.into(),
-        rights,
-    })
+    Ok(left)
 }
 
-fn parse_expr_as(pair: Pair<Rule>) -> ParseResult<ExprAS> {
+fn parse_expr_as(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
-    let left = parse_expr_mdr(left)?;
-    let mut rights = Vec::new();
+    let mut left = parse_expr_mdr(left)?;
     for (op, right) in pairs.tuples() {
         let op = match op.as_str() {
-            "+" => OpAS::Add,
-            "-" => OpAS::Sub,
+            "+" => BinOp::Add,
+            "-" => BinOp::Sub,
             rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_mdr(right)?;
-        rights.push(Right { op, expr: right });
+        left = Node::BinExpr(BinExpr::new(left, right, op));
     }
-    Ok(ExprAS {
-        left: left.into(),
-        rights,
-    })
+    Ok(left)
 }
 
-fn parse_expr_mdr(pair: Pair<Rule>) -> ParseResult<ExprMDR> {
+fn parse_expr_mdr(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let left = pairs.next().unwrap();
-    let left = parse_expr_not(left)?;
-    let mut rights = Vec::new();
+    let mut left = parse_expr_not(left)?;
     for (op, right) in pairs.tuples() {
         let op = match op.as_str() {
-            "*" => OpMDR::Mul,
-            "/" => OpMDR::Div,
-            "%" => OpMDR::Rem,
+            "*" => BinOp::Mul,
+            "/" => BinOp::Div,
+            "%" => BinOp::Rem,
             rule => unreachable!("{:?}", rule),
         };
         let right = parse_expr_not(right)?;
-        rights.push(Right { op, expr: right });
+        left = Node::BinExpr(BinExpr::new(left, right, op));
     }
-    Ok(ExprMDR {
-        left: left.into(),
-        rights,
-    })
+    Ok(left)
 }
 
-fn parse_expr_not(pair: Pair<Rule>) -> ParseResult<ExprNot> {
+fn parse_expr_not(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let first = pairs.next().unwrap();
     let op = match first.as_str() {
-        "not" => Some(OpNot),
+        "not" => Some(UnOp::Not),
         _ => None,
     };
-    let pair = if op.is_some() {
+    let inner = if op.is_some() {
         pairs.next().unwrap()
     } else {
         first
     };
-    let expr = parse_expr_call(pair)?;
-    Ok(ExprNot { op, expr })
+    let inner = parse_expr_call(inner)?;
+    Ok(if let Some(op) = op {
+        Node::UnExpr(UnExpr::new(inner, op))
+    } else {
+        inner
+    })
 }
 
-fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
+fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let pairs = pair.into_inner();
     let mut calls = Vec::new();
@@ -246,8 +232,8 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
                     let arg = parse_expr_insert(pair)?;
                     args.push(arg);
                 }
-                calls.push(ExprCall {
-                    expr,
+                calls.push(CallExpr {
+                    expr: expr.into(),
                     args,
                     chained: chained.take(),
                 });
@@ -259,20 +245,13 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<ExprCall> {
     let mut calls = calls.into_iter();
     let mut call = calls.next().unwrap();
     for mut chained_call in calls {
-        chained_call.args.insert(
-            0,
-            ExprInsert::wrapping(Term::wrapping(Items::wrapping(Item::wrapping(
-                ExprOr::wrapping(ExprAnd::wrapping(ExprCmp::wrapping(ExprAS::wrapping(
-                    ExprMDR::wrapping(ExprNot::wrapping(call)),
-                )))),
-            )))),
-        );
+        chained_call.args.insert(0, Node::Call(call));
         call = chained_call;
     }
-    Ok(call)
+    Ok(Node::Call(call))
 }
 
-fn parse_expr_insert(pair: Pair<Rule>) -> ParseResult<ExprInsert> {
+fn parse_expr_insert(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
     let term = parse_term(pairs.next().unwrap())?;
@@ -300,7 +279,11 @@ fn parse_expr_insert(pair: Pair<Rule>) -> ParseResult<ExprInsert> {
             rule => unreachable!("{:?}", rule),
         }
     }
-    Ok(ExprInsert { term, insertions })
+    Ok(if insertions.is_empty() {
+        Node::Term(term)
+    } else {
+        Node::Insert(InsertExpr { term, insertions })
+    })
 }
 
 fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
@@ -332,7 +315,7 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
         Rule::paren_expr => {
             let pair = only(pair);
             let items = parse_items(pair)?;
-            Term::wrapping(items)
+            Term::Expr(items)
         }
         Rule::string => {
             let string = parse_string_literal(pair);
