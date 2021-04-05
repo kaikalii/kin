@@ -82,6 +82,7 @@ impl<'a> fmt::Display for Def<'a> {
             for item in &self.items.items {
                 write!(f, "\n    {}", item)?;
             }
+            write!(f, "\nend")?;
         }
         Ok(())
     }

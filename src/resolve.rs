@@ -24,8 +24,6 @@ impl ResolutionErrorKind {
     }
 }
 
-use ResolutionErrorKind::*;
-
 #[derive(Debug)]
 pub struct ResolutionError<'a> {
     pub kind: ResolutionErrorKind,
@@ -49,17 +47,30 @@ pub struct Resolver<'a> {
     pub errors: Vec<ResolutionError<'a>>,
 }
 
+#[derive(Default)]
+pub struct Scope<'a> {
+    pub defs: HashMap<String, Vec<CompileDef<'a>>>,
+    pub param_defs: HashSet<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum CompileDef<'a> {
+    Noot(Def<'a>),
+    C(&'static str),
+}
+
 impl<'a> Resolver<'a> {
     pub fn new() -> Self {
-        // let mut res =
-        Resolver {
+        let mut res = Resolver {
             scopes: vec![Scope::default()],
             errors: Vec::new(),
-        }
-        // ;
-        // res
+        };
+
+        res.push_def("print", CompileDef::C("noot_print"));
+
+        res
     }
-    pub fn find_def(&self, name: &str) -> Option<&Def> {
+    pub fn find_def(&self, name: &str) -> Option<&CompileDef> {
         self.scopes
             .iter()
             .rev()
@@ -72,7 +83,7 @@ impl<'a> Resolver<'a> {
             .rev()
             .any(|scope| scope.defs.contains_key(name) || scope.param_defs.contains(name))
     }
-    pub fn push_def<N>(&mut self, name: N, def: Def<'a>)
+    pub fn push_def<N>(&mut self, name: N, def: CompileDef<'a>)
     where
         N: Into<String>,
     {
@@ -100,121 +111,5 @@ impl<'a> Resolver<'a> {
     #[track_caller]
     pub fn pop_scope(&mut self) {
         self.scopes.pop().expect("No scope to pop");
-    }
-}
-
-#[derive(Default)]
-pub struct Scope<'a> {
-    pub defs: HashMap<String, Vec<Def<'a>>>,
-    pub param_defs: HashSet<String>,
-}
-
-pub trait Resolve<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>);
-}
-
-impl<'a> Resolve<'a> for Param<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        res.push_param_def(self.ident.name.clone());
-    }
-}
-
-impl<'a> Resolve<'a> for Params<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        for param in &mut self.params {
-            param.resolve(res);
-        }
-    }
-}
-
-impl<'a> Resolve<'a> for Items<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        for item in &mut self.items {
-            item.resolve(res);
-        }
-    }
-}
-
-impl<'a> Resolve<'a> for Item<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        match self {
-            Item::Node(expr) => expr.resolve(res),
-            Item::Def(def) => def.resolve(res),
-        }
-    }
-}
-
-impl<'a> Resolve<'a> for Def<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        // Push a scope for this def
-        res.push_scope();
-        // Resolve parameters and items
-        self.params.resolve(res);
-        self.items.resolve(res);
-        // Pop the def's scope
-        res.pop_scope();
-        // Push the def into its enclosing scope
-        res.push_def(self.ident.name.clone(), self.clone());
-    }
-}
-
-impl<'a> Resolve<'a> for Node<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        match self {
-            Node::Term(term) => term.resolve(res),
-            Node::BinExpr(expr) => expr.resolve(res),
-            Node::UnExpr(expr) => expr.resolve(res),
-            Node::Call(expr) => expr.resolve(res),
-            Node::Insert(expr) => expr.resolve(res),
-        }
-    }
-}
-
-impl<'a> Resolve<'a> for BinExpr<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.left.resolve(res);
-        self.right.resolve(res);
-    }
-}
-
-impl<'a> Resolve<'a> for UnExpr<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.inner.resolve(res);
-    }
-}
-
-impl<'a> Resolve<'a> for CallExpr<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.expr.resolve(res);
-        for arg in &mut self.args {
-            arg.resolve(res);
-        }
-    }
-}
-
-impl<'a> Resolve<'a> for InsertExpr<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        self.term.resolve(res);
-        for ins in &mut self.insertions {
-            ins.term.resolve(res);
-        }
-    }
-}
-
-impl<'a> Resolve<'a> for Term<'a> {
-    fn resolve(&mut self, res: &mut Resolver<'a>) {
-        match self {
-            Term::Closure(closure) => {
-                res.push_scope();
-                closure.params.resolve(res);
-                closure.body.resolve(res);
-                res.pop_scope();
-            }
-            Term::Expr(expr) => expr.resolve(res),
-            Term::Ident(ident) if !res.def_exists(&ident.name) => res
-                .errors
-                .push(UnknownDef(ident.name.clone()).span(ident.span.clone())),
-            _ => {}
-        }
     }
 }

@@ -7,26 +7,34 @@ mod parse;
 mod resolve;
 
 fn main() {
-    use {compile::*, resolve::*};
+    use std::process::Command;
+
+    use compile::*;
 
     color_backtrace::install();
 
     let input = std::fs::read_to_string("test.noot").unwrap();
     match parse::parse(&input) {
-        Ok(mut items) => {
+        Ok(items) => {
             println!("{}", items);
 
             println!();
 
-            let mut resolver = Resolver::new();
-            items.resolve(&mut resolver);
-            if resolver.errors.is_empty() {
+            let mut target = CTarget::new("main", true);
+            target.compile_items(items, false);
+            if target.res.errors.is_empty() {
                 println!("No resolution errors");
-                let mut target = CTarget::new("main", true);
-                target.compile_items(items);
                 target.write().unwrap();
+                Command::new("gcc")
+                    .arg("build/main.c")
+                    .arg("-o")
+                    .arg("test")
+                    .spawn()
+                    .unwrap()
+                    .wait()
+                    .unwrap();
             } else {
-                for error in &resolver.errors {
+                for error in &target.res.errors {
                     println!("{}", error);
                 }
             }
