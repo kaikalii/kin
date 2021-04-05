@@ -138,7 +138,7 @@ impl<'a> Resolve<'a> for Items<'a> {
 impl<'a> Resolve<'a> for Item<'a> {
     fn resolve(&mut self, res: &mut Resolver<'a>) {
         match self {
-            Item::Expression(expr) => expr.resolve(res),
+            Item::Node(expr) => expr.resolve(res),
             Item::Def(def) => def.resolve(res),
         }
     }

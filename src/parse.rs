@@ -53,7 +53,7 @@ fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
     debug_pair!(pair);
     let pair = only(pair);
     Ok(match pair.as_rule() {
-        Rule::expr => Item::Expression(parse_expr(pair)?),
+        Rule::expr => Item::Node(parse_expr(pair)?),
         Rule::def => Item::Def(parse_def(pair)?),
         rule => unreachable!("{:?}", rule),
     })
@@ -88,7 +88,7 @@ fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
     let items = match pair.as_rule() {
         Rule::items => parse_items(pair)?,
         Rule::expr => Items {
-            items: vec![Item::Expression(parse_expr(pair)?)],
+            items: vec![Item::Node(parse_expr(pair)?)],
         },
         rule => unreachable!("{:?}", rule),
     };
@@ -248,7 +248,11 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<Node> {
         chained_call.args.insert(0, Node::Call(call));
         call = chained_call;
     }
-    Ok(Node::Call(call))
+    Ok(if call.args.is_empty() {
+        *call.expr
+    } else {
+        Node::Call(call)
+    })
 }
 
 fn parse_expr_insert(pair: Pair<Rule>) -> ParseResult<Node> {

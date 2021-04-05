@@ -29,7 +29,7 @@ impl<'a> fmt::Display for Ident<'a> {
 
 #[derive(Debug, Display, Clone)]
 pub enum Item<'a> {
-    Expression(Node<'a>),
+    Node(Node<'a>),
     Def(Def<'a>),
 }
 

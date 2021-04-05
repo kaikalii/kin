@@ -7,7 +7,7 @@ mod parse;
 mod resolve;
 
 fn main() {
-    use resolve::*;
+    use {compile::*, resolve::*};
 
     color_backtrace::install();
 
@@ -22,6 +22,9 @@ fn main() {
             items.resolve(&mut resolver);
             if resolver.errors.is_empty() {
                 println!("No resolution errors");
+                let mut target = CTarget::new("main", true);
+                target.compile_items(items);
+                target.write().unwrap();
             } else {
                 for error in &resolver.errors {
                     println!("{}", error);

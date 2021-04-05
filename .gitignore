@@ -1,2 +1,4 @@
 /target
 *.noot
+/build
+*.exe
