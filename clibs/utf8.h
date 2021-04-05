@@ -143,7 +143,7 @@ utf8_nonnull utf8_weak void *utf8ncat(void *utf8_restrict dst,
 utf8_nonnull utf8_pure utf8_weak int utf8ncmp(const void *src1,
                                               const void *src2, size_t n);
 
-// Copy the utf8 string src onto the memory allocated in dst.   
+// Copy the utf8 string src onto the memory allocated in dst.
 // Copies at most n bytes. If n falls partway through a utf8
 // codepoint, or if dst doesn't have enough room for a null
 // terminator, the final string will be cut short to preserve
@@ -175,7 +175,8 @@ utf8_nonnull utf8_pure utf8_weak size_t utf8size_lazy(const void *str);
 
 // Similar to utf8size, except that only at most n bytes of src are looked and
 // the null terminating byte is excluded.
-utf8_nonnull utf8_pure utf8_weak size_t utf8nsize_lazy(const void *str, size_t n);
+utf8_nonnull utf8_pure utf8_weak size_t utf8nsize_lazy(const void *str,
+                                                       size_t n);
 
 // Number of utf8 codepoints in the utf8 string src that consists entirely
 // of utf8 codepoints from the utf8 string accept.
@@ -478,16 +479,14 @@ void *utf8dup_ex(const void *src, void *(*alloc_func_ptr)(void *, size_t),
 
 void *utf8fry(const void *str);
 
-size_t utf8len(const void *str) {
-  return utf8nlen(str, SIZE_MAX);
-}
+size_t utf8len(const void *str) { return utf8nlen(str, SIZE_MAX); }
 
 size_t utf8nlen(const void *str, size_t n) {
   const unsigned char *s = (const unsigned char *)str;
   const unsigned char *t = s;
   size_t length = 0;
 
-  while ((size_t) (s-t) < n && '\0' != *s) {
+  while ((size_t)(s - t) < n && '\0' != *s) {
     if (0xf0 == (0xf8 & *s)) {
       // 4-byte utf8 code point (began with 0b11110xxx)
       s += 4;
@@ -507,7 +506,7 @@ size_t utf8nlen(const void *str, size_t n) {
     length++;
   }
 
-  if ((size_t) (s-t) > n) {
+  if ((size_t)(s - t) > n) {
     length--;
   }
   return length;
@@ -641,11 +640,13 @@ void *utf8ncpy(void *utf8_restrict dst, const void *utf8_restrict src,
     }
   }
 
-  for ( check_index = index - 1; check_index > 0 && 0x80 == (0xc0 & d[check_index]); check_index--) {
+  for (check_index = index - 1;
+       check_index > 0 && 0x80 == (0xc0 & d[check_index]); check_index--) {
     // just moving the index
   }
 
-  if (check_index < index && (index - check_index) < utf8codepointsize(d[check_index])) {
+  if (check_index < index &&
+      (index - check_index) < utf8codepointsize(d[check_index])) {
     index = check_index;
   }
 
@@ -817,13 +818,9 @@ void *utf8pbrk(const void *str, const void *accept) {
   return utf8_null;
 }
 
-size_t utf8size(const void *str) {
-  return utf8size_lazy(str) + 1;
-}
+size_t utf8size(const void *str) { return utf8size_lazy(str) + 1; }
 
-size_t utf8size_lazy(const void *str) {
-  return utf8nsize_lazy(str, SIZE_MAX);
-}
+size_t utf8size_lazy(const void *str) { return utf8nsize_lazy(str, SIZE_MAX); }
 
 size_t utf8nsize_lazy(const void *str, size_t n) {
   const char *s = (const char *)str;
@@ -970,16 +967,14 @@ void *utf8casestr(const void *haystack, const void *needle) {
   }
 }
 
-void *utf8valid(const void *str) {
-  return utf8nvalid(str, SIZE_MAX);
-}
+void *utf8valid(const void *str) { return utf8nvalid(str, SIZE_MAX); }
 
 void *utf8nvalid(const void *str, size_t n) {
   const char *s = (const char *)str;
   const char *t = s;
   size_t consumed, remained;
 
-  while ((void) (consumed = (size_t) (s-t)), consumed < n && '\0' != *s) {
+  while ((void)(consumed = (size_t)(s - t)), consumed < n && '\0' != *s) {
     remained = n - consumed;
 
     if (0xf0 == (0xf8 & *s)) {
