@@ -284,4 +284,14 @@ NootValue noot_neg(NootValue val) {
     }
 }
 
+NootValue noot_not(NootValue val) {
+    if (val.type == Bool) return new_bool(!val.data.Bool);
+    else return new_bool(val.type == Nil);
+}
+
+int noot_is_true(NootValue val) {
+    if (val.type == Bool) return val.data.Bool;
+    else return val.type != Nil;
+}
+
 #endif

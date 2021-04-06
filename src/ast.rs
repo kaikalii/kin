@@ -126,7 +126,7 @@ impl<'a> BinExpr<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
     Or,
     And,

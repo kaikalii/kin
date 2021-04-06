@@ -17,6 +17,7 @@ pub struct CTarget<'a> {
     pub curr_function: Vec<usize>,
     pub block_vals: VecDeque<String>,
     pub main: bool,
+    pub indent: usize,
 }
 
 pub struct CFunction {
@@ -49,6 +50,7 @@ impl<'a> CTarget<'a> {
             block_vals: VecDeque::new(),
             functions,
             curr_function,
+            indent: 1,
         }
     }
     pub fn write(self) -> io::Result<()> {
@@ -99,8 +101,9 @@ impl<'a> CTarget<'a> {
         // Write definitions
         for function in &self.functions {
             writeln!(source, "{} {{", function.sig)?;
-            for line in function.body.lines() {
-                writeln!(source, "    {}", line)?;
+            write!(source, "{}", function.body)?;
+            if function.sig.starts_with("int main") {
+                writeln!(source, "    return 0;")?;
             }
             writeln!(source, "}}\n")?;
         }
@@ -114,6 +117,10 @@ impl<'a> CTarget<'a> {
             self.compile_item(item, push);
         }
     }
+    pub fn push_line(&mut self, line: String) {
+        let line = format!("{:indent$}{}\n", "", line, indent = self.indent * 4);
+        *self.body() += &line;
+    }
     pub fn compile_item(&mut self, item: Item<'a>, push: bool) {
         match item {
             Item::Def(def) => self.compile_def(def),
@@ -122,7 +129,7 @@ impl<'a> CTarget<'a> {
                 if push {
                     self.block_vals.push_back(compiled);
                 } else {
-                    *self.body() += &format!("{};\n", compiled);
+                    self.push_line(format!("{};", compiled));
                 }
             }
         }
@@ -138,7 +145,7 @@ impl<'a> CTarget<'a> {
             // Variable
             self.compile_items(def.items.clone(), true);
             let expr = self.block_vals.pop_front().unwrap();
-            *self.body() += &format!("NootValue {} = {};\n", c_name, expr);
+            self.push_line(format!("NootValue {} = {};\n", c_name, expr));
         } else {
             // Function
             let mut params = String::new();
@@ -158,7 +165,7 @@ impl<'a> CTarget<'a> {
             });
             self.compile_items(def.items.clone(), true);
             let ret = self.block_vals.pop_front().unwrap();
-            *self.body() += &format!("return {};", ret);
+            self.push_line(format!("return {};", ret));
             self.curr_function.pop();
         }
         // Pop the def's scope
@@ -178,6 +185,23 @@ impl<'a> CTarget<'a> {
     }
     pub fn compile_bin_expr(&mut self, expr: BinExpr<'a>) -> String {
         let noot_fn = match expr.op {
+            BinOp::Or | BinOp::And => {
+                let temp_name = self.res.c_name_for("temp");
+                self.res.push_c_def("temp", &temp_name);
+                let left = self.compile_node(*expr.left);
+                self.push_line(format!("NootValue {} = {};", temp_name, left));
+                self.push_line(format!(
+                    "if ({}noot_is_true({})) {{",
+                    if expr.op == BinOp::Or { "!" } else { "" },
+                    temp_name
+                ));
+                self.indent += 1;
+                let right = self.compile_node(*expr.right);
+                self.push_line(format!("{} = {};", temp_name, right));
+                self.indent -= 1;
+                self.push_line("}".into());
+                return temp_name;
+            }
             BinOp::Add => "noot_add",
             BinOp::Sub => "noot_sub",
             BinOp::Mul => "noot_mul",

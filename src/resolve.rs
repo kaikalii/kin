@@ -50,7 +50,7 @@ pub struct Scope<'a> {
 #[derive(Debug, Clone)]
 pub enum CompileDef<'a> {
     Noot { name: String, def: Def<'a> },
-    C(&'static str),
+    C(String),
     Param(usize),
 }
 
@@ -81,14 +81,14 @@ impl<'a> Resolver<'a> {
             })
         })
     }
-    pub fn push_c_def(&mut self, name: &'static str, c_name: &'static str) {
+    pub fn push_c_def(&mut self, name: &str, c_name: &str) {
         self.scopes
             .last_mut()
             .unwrap()
             .defs
             .entry(name.into())
             .or_default()
-            .push(CompileDef::C(c_name));
+            .push(CompileDef::C(c_name.into()));
     }
     pub fn c_name_for(&self, name: &str) -> String {
         if self.c_name_exists(&name) {
