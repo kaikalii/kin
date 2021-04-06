@@ -202,12 +202,17 @@ impl<'a> CTarget<'a> {
                 self.push_line("}".into());
                 return temp_name;
             }
+            BinOp::Is => "noot_eq",
+            BinOp::Isnt => "noot_neq",
+            BinOp::Less => "noot_lt",
+            BinOp::LessOrEqual => "noot_le",
+            BinOp::Greater => "noot_gt",
+            BinOp::GreaterOrEqual => "noot_ge",
             BinOp::Add => "noot_add",
             BinOp::Sub => "noot_sub",
             BinOp::Mul => "noot_mul",
             BinOp::Div => "noot_div",
             BinOp::Rem => "noot_rem",
-            _ => todo!(),
         };
         format!(
             "{}({}, {})",

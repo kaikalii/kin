@@ -100,6 +100,10 @@ NootValue noot_print(int count, NootValue* args) {
         switch (val.type) {
         case Nil:
             break;
+        case Bool:
+            if (val.data.Bool) printf("true");
+            else printf("false");
+            break;
         case Nat:
             printf("%d", val.data.Nat);
             break;
@@ -274,6 +278,150 @@ NootValue noot_rem(NootValue a, NootValue b) {
             return new_real(fmod(a.data.Real, b.data.Real));
         }
     }
+}
+
+int noot_eq_impl(NootValue a, NootValue b) {
+    switch (a.type) {
+    case Nil: return b.type == Nil;
+    case Bool: return b.type == Bool && a.data.Bool == b.data.Bool;
+    case Nat:
+        switch (b.type) {
+        case Nat:
+            return a.data.Nat == b.data.Nat;
+        case Int:
+            return a.data.Nat == b.data.Int;
+        case Real:
+            return a.data.Nat == b.data.Real;
+        default: return 0;
+        }
+    case Int:
+        switch (b.type) {
+        case Nat:
+            return a.data.Int == b.data.Nat;
+        case Int:
+            return a.data.Int == b.data.Int;
+        case Real:
+            return a.data.Int == b.data.Real;
+        default: return 0;
+        }
+    case Real:
+        switch (b.type) {
+        case Nat:
+            return a.data.Real == b.data.Nat;
+        case Int:
+            return a.data.Real == b.data.Int;
+        case Real:
+            return a.data.Real == b.data.Real;
+        default: return 0;
+        }
+    case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) == 0;
+    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
+    case Function: return b.type == Function && a.data.Function == b.data.Function;
+    }
+}
+
+int noot_lt_impl(NootValue a, NootValue b) {
+    switch (a.type) {
+    case Nil: return 0;
+    case Bool: return b.type == Bool && a.data.Bool < b.data.Bool;
+    case Nat:
+        switch (b.type) {
+        case Nat:
+            return a.data.Nat < b.data.Nat;
+        case Int:
+            return a.data.Nat < b.data.Int;
+        case Real:
+            return a.data.Nat < b.data.Real;
+        default: return 0;
+        }
+    case Int:
+        switch (b.type) {
+        case Nat:
+            return a.data.Int < b.data.Nat;
+        case Int:
+            return a.data.Int < b.data.Int;
+        case Real:
+            return a.data.Int < b.data.Real;
+        default: return 0;
+        }
+    case Real:
+        switch (b.type) {
+        case Nat:
+            return a.data.Real < b.data.Nat;
+        case Int:
+            return a.data.Real < b.data.Int;
+        case Real:
+            return a.data.Real < b.data.Real;
+        default: return 0;
+        }
+    case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) < 0;
+    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
+    case Function: return b.type == Function && a.data.Function < b.data.Function;
+    }
+}
+
+int noot_gt_impl(NootValue a, NootValue b) {
+    switch (a.type) {
+    case Nil: return 0;
+    case Bool: return b.type == Bool && a.data.Bool > b.data.Bool;
+    case Nat:
+        switch (b.type) {
+        case Nat:
+            return a.data.Nat > b.data.Nat;
+        case Int:
+            return a.data.Nat > b.data.Int;
+        case Real:
+            return a.data.Nat > b.data.Real;
+        default: return 0;
+        }
+    case Int:
+        switch (b.type) {
+        case Nat:
+            return a.data.Int > b.data.Nat;
+        case Int:
+            return a.data.Int > b.data.Int;
+        case Real:
+            return a.data.Int > b.data.Real;
+        default: return 0;
+        }
+    case Real:
+        switch (b.type) {
+        case Nat:
+            return a.data.Real > b.data.Nat;
+        case Int:
+            return a.data.Real > b.data.Int;
+        case Real:
+            return a.data.Real > b.data.Real;
+        default: return 0;
+        }
+    case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) > 0;
+    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
+    case Function: return b.type == Function && a.data.Function > b.data.Function;
+    }
+}
+
+NootValue noot_eq(NootValue a, NootValue b) {
+    return new_bool(noot_eq_impl(a, b));
+}
+
+NootValue noot_neq(NootValue a, NootValue b) {
+    return new_bool(!noot_eq_impl(a, b));
+}
+
+NootValue noot_lt(NootValue a, NootValue b) {
+    return new_bool(noot_lt_impl(a, b));
+}
+
+NootValue noot_le(NootValue a, NootValue b) {
+    return new_bool(noot_lt_impl(a, b) || noot_eq_impl(a, b));
+}
+
+NootValue noot_gt(NootValue a, NootValue b) {
+    return new_bool(noot_gt_impl(a, b));
+}
+
+NootValue noot_ge(NootValue a, NootValue b) {
+    return new_bool(noot_gt_impl(a, b) || noot_eq_impl(a, b));
 }
 
 NootValue noot_neg(NootValue val) {
