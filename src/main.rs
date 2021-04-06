@@ -19,7 +19,7 @@ fn main() {
             let mut target = CTarget::new("main", true);
             target.compile_items(items, false);
             if target.errors.is_empty() {
-                println!("No resolution errors");
+                println!("Compilation succeeded");
                 target.write().unwrap();
                 Command::new("gcc")
                     .arg("build/main.c")

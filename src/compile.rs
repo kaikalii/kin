@@ -14,9 +14,28 @@ use pest::{
 
 use crate::{ast::*, parse::Rule};
 
-type ShadowStack = Vec<(String, bool)>;
-type NootScope = HashMap<String, ShadowStack>;
-type NootScopes = Vec<NootScope>;
+pub enum CompileDef<'a> {
+    Noot { c_name: String, def: Def<'a> },
+    C { c_name: String, function: bool },
+}
+
+impl<'a> CompileDef<'a> {
+    pub fn name(&self) -> &str {
+        match self {
+            CompileDef::Noot { c_name, .. } | CompileDef::C { c_name, .. } => c_name.as_str(),
+        }
+    }
+    pub fn is_function(&self) -> bool {
+        match self {
+            CompileDef::Noot { def, .. } => !def.params.params.is_empty(),
+            CompileDef::C { function, .. } => *function,
+        }
+    }
+}
+
+type ShadowStack<'a> = Vec<CompileDef<'a>>;
+type NootScope<'a> = HashMap<String, ShadowStack<'a>>;
+type NootScopes<'a> = Vec<NootScope<'a>>;
 type CScope = HashSet<String>;
 type CScopes = Vec<CScope>;
 
@@ -58,7 +77,7 @@ pub struct CTarget<'a> {
     pub c_functions: IndexMap<String, CFunction>,
     pub curr_c_function: Vec<String>,
     pub block_vals: VecDeque<String>,
-    pub noot_scopes: NootScopes,
+    pub noot_scopes: NootScopes<'a>,
     pub main: bool,
     pub indent: usize,
     pub errors: Vec<CompileError<'a>>,
@@ -86,7 +105,15 @@ impl<'a> CTarget<'a> {
             curr_function.push("main".into());
         }
         let mut noot_scope = NootScope::new();
-        noot_scope.insert("print".into(), vec![("noot_print".into(), true)]);
+        for &(noot_name, c_name) in &[("print", "noot_print")] {
+            noot_scope.insert(
+                noot_name.into(),
+                vec![CompileDef::C {
+                    c_name: c_name.into(),
+                    function: true,
+                }],
+            );
+        }
         CTarget {
             name: name.into(),
             main,
@@ -220,7 +247,7 @@ impl<'a> CTarget<'a> {
     fn body(&mut self) -> &mut String {
         &mut self.curr_c_function_mut().body
     }
-    fn top_noot_scope(&mut self) -> &mut NootScope {
+    fn top_noot_scope(&mut self) -> &mut NootScope<'a> {
         self.noot_scopes.last_mut().unwrap()
     }
     fn top_c_scope(&mut self) -> &mut CScope {
@@ -243,7 +270,10 @@ impl<'a> CTarget<'a> {
                 self.top_noot_scope()
                     .entry(param.ident.name.clone())
                     .or_default()
-                    .push((format!("args[{}]", i), false));
+                    .push(CompileDef::C {
+                        c_name: format!("args[{}]", i),
+                        function: false,
+                    });
             }
             let sig = format!("NootValue {}(int count, NootValue* args)", c_name);
             self.curr_c_function.push(c_name.clone());
@@ -270,9 +300,9 @@ impl<'a> CTarget<'a> {
         self.noot_scopes.pop();
         // Push the def into its enclosing scope
         self.top_noot_scope()
-            .entry(def.ident.name)
+            .entry(def.ident.name.clone())
             .or_default()
-            .push((c_name, is_function));
+            .push(CompileDef::Noot { c_name, def });
     }
     #[must_use]
     pub fn compile_node(&mut self, node: Node<'a>) -> String {
@@ -291,7 +321,10 @@ impl<'a> CTarget<'a> {
                 self.top_noot_scope()
                     .entry(temp_name.clone())
                     .or_default()
-                    .push((temp_name.clone(), false));
+                    .push(CompileDef::C {
+                        c_name: temp_name.clone(),
+                        function: false,
+                    });
                 let left = self.compile_node(*expr.left);
                 self.push_line(format!("NootValue {} = {};", temp_name, left));
                 self.push_line(format!(
@@ -356,16 +389,16 @@ impl<'a> CTarget<'a> {
             Term::Real(i) => format!("new_real({})", i),
             Term::String(s) => format!("new_string({:?}, {})", s, s.len()),
             Term::Ident(ident) => {
-                let c_name = self
+                let compdef = self
                     .noot_scopes
                     .iter()
                     .rev()
                     .find_map(|scope| scope.get(&ident.name).and_then(|ss| ss.last()));
-                if let Some((c_name, is_function)) = c_name {
-                    if *is_function {
-                        format!("new_function({})", c_name)
+                if let Some(compdef) = compdef {
+                    if compdef.is_function() {
+                        format!("new_function({})", compdef.name())
                     } else {
-                        c_name.clone()
+                        compdef.name().into()
                     }
                 } else {
                     self.errors.push(
@@ -388,7 +421,10 @@ impl<'a> CTarget<'a> {
                     self.top_noot_scope()
                         .entry(param.ident.name.clone())
                         .or_default()
-                        .push((format!("args[{}]", i), false));
+                        .push(CompileDef::C {
+                            c_name: format!("args[{}]", i),
+                            function: false,
+                        });
                 }
                 let sig = format!("NootValue {}(int count, NootValue* args)", c_name);
                 self.c_functions.insert(
