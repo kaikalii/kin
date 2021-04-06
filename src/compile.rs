@@ -14,7 +14,7 @@ use pest::{
 
 use crate::{ast::*, parse::Rule};
 
-type ShadowStack = Vec<String>;
+type ShadowStack = Vec<(String, bool)>;
 type NootScope = HashMap<String, ShadowStack>;
 type NootScopes = Vec<NootScope>;
 type CScope = HashSet<String>;
@@ -85,6 +85,8 @@ impl<'a> CTarget<'a> {
             );
             curr_function.push("main".into());
         }
+        let mut noot_scope = NootScope::new();
+        noot_scope.insert("print".into(), vec![("noot_print".into(), true)]);
         CTarget {
             name: name.into(),
             main,
@@ -94,7 +96,7 @@ impl<'a> CTarget<'a> {
                 .into_iter()
                 .collect(),
             block_vals: VecDeque::new(),
-            noot_scopes: vec![NootScope::new()],
+            noot_scopes: vec![noot_scope],
             c_functions,
             curr_c_function: curr_function,
             indent: 1,
@@ -241,7 +243,7 @@ impl<'a> CTarget<'a> {
                 self.top_noot_scope()
                     .entry(param.ident.name.clone())
                     .or_default()
-                    .push(format!("args[{}]", i));
+                    .push((format!("args[{}]", i), false));
             }
             let sig = format!("NootValue {}(int count, NootValue* args)", c_name);
             self.curr_c_function.push(c_name.clone());
@@ -270,7 +272,7 @@ impl<'a> CTarget<'a> {
         self.top_noot_scope()
             .entry(def.ident.name)
             .or_default()
-            .push(c_name);
+            .push((c_name, is_function));
     }
     #[must_use]
     pub fn compile_node(&mut self, node: Node<'a>) -> String {
@@ -289,7 +291,7 @@ impl<'a> CTarget<'a> {
                 self.top_noot_scope()
                     .entry(temp_name.clone())
                     .or_default()
-                    .push(temp_name.clone());
+                    .push((temp_name.clone(), false));
                 let left = self.compile_node(*expr.left);
                 self.push_line(format!("NootValue {} = {};", temp_name, left));
                 self.push_line(format!(
@@ -359,8 +361,12 @@ impl<'a> CTarget<'a> {
                     .iter()
                     .rev()
                     .find_map(|scope| scope.get(&ident.name).and_then(|ss| ss.last()));
-                if let Some(c_name) = c_name {
-                    c_name.clone()
+                if let Some((c_name, is_function)) = c_name {
+                    if *is_function {
+                        format!("new_function({})", c_name)
+                    } else {
+                        c_name.clone()
+                    }
                 } else {
                     self.errors.push(
                         CompileErrorKind::UnknownDef(ident.name.clone()).span(ident.span.clone()),
@@ -368,10 +374,39 @@ impl<'a> CTarget<'a> {
                     String::new()
                 }
             }
-            Term::Closure(_) => {
+            Term::Closure(closure) => {
+                let c_name = self.c_name_for("closure", true);
                 self.noot_scopes.push(NootScope::default());
+
+                let mut params = String::new();
+                for (i, param) in closure.params.params.iter().enumerate() {
+                    if i > 0 {
+                        params += ", ";
+                    }
+                    params += "NootValue ";
+                    params += &param.ident.name;
+                    self.top_noot_scope()
+                        .entry(param.ident.name.clone())
+                        .or_default()
+                        .push((format!("args[{}]", i), false));
+                }
+                let sig = format!("NootValue {}(int count, NootValue* args)", c_name);
+                self.c_functions.insert(
+                    c_name.clone(),
+                    CFunction {
+                        sig,
+                        body: String::new(),
+                        scopes: vec![CScope::new()],
+                    },
+                );
+                self.curr_c_function.push(c_name.clone());
+                self.compile_items(closure.body.clone(), true);
+                let ret = self.block_vals.pop_front().unwrap();
+                self.push_line(format!("return {};", ret));
+                self.curr_c_function.pop();
+
                 self.noot_scopes.pop();
-                todo!()
+                format!("new_function(&{})", c_name)
             }
             Term::Expr(items) => {
                 self.compile_items(items, true);

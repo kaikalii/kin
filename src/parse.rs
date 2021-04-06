@@ -336,7 +336,14 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
                     break;
                 }
             }
-            let body = parse_items(pairs.next().unwrap())?;
+            let pair = pairs.next().unwrap();
+            let body = match pair.as_rule() {
+                Rule::items => parse_items(pair)?,
+                Rule::expr => Items {
+                    items: vec![Item::Node(parse_expr(pair)?)],
+                },
+                rule => unreachable!("{:?}", rule),
+            };
             Term::Closure(
                 Closure {
                     params: Params { params },
