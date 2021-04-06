@@ -271,4 +271,12 @@ NootValue noot_rem(NootValue a, NootValue b) {
     }
 }
 
+NootValue noot_neg(NootValue val) {
+    switch (val.type) {
+    case Nat: return new_nat(-val.data.Nat);
+    case Int: return new_nat(-val.data.Int);
+    case Real: return new_nat(-val.data.Real);
+    }
+}
+
 #endif

@@ -43,7 +43,7 @@ impl<'a> CTarget<'a> {
             main,
             header_includes: once("noot.h".into()).collect(),
             source_includes: once("noot.h".into()).collect(),
-            other_c_lib_files: vec!["utf8".into(), "tgc.h".into(), "tgc.c".into()]
+            other_c_lib_files: vec!["utf8.h".into(), "tgc.h".into(), "tgc.c".into()]
                 .into_iter()
                 .collect(),
             block_vals: VecDeque::new(),
@@ -172,10 +172,10 @@ impl<'a> CTarget<'a> {
             Node::Term(term) => self.compile_term(term),
             Node::BinExpr(expr) => self.compile_bin_expr(expr),
             Node::Call(expr) => self.compile_call_expr(expr),
-            node => todo!("{:?}", node),
+            Node::UnExpr(expr) => self.compile_un_expr(expr),
+            Node::Insert(expr) => todo!("{:?}", expr),
         }
     }
-    #[must_use]
     pub fn compile_bin_expr(&mut self, expr: BinExpr<'a>) -> String {
         let noot_fn = match expr.op {
             BinOp::Add => "noot_add",
@@ -191,6 +191,13 @@ impl<'a> CTarget<'a> {
             self.compile_node(*expr.left),
             self.compile_node(*expr.right)
         )
+    }
+    pub fn compile_un_expr(&mut self, expr: UnExpr<'a>) -> String {
+        let noot_fn = match expr.op {
+            UnOp::Neg => "noot_neg",
+            UnOp::Not => "noot_not",
+        };
+        format!("{}({})", noot_fn, self.compile_node(*expr.inner))
     }
     pub fn compile_call_expr(&mut self, call: CallExpr<'a>) -> String {
         let f = self.compile_node(*call.expr);

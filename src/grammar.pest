@@ -29,7 +29,7 @@ op_mdr = { "*" | "/" | "%" }
 op_comp = { "isnt" | "is" | "<=" | ">=" | "<" | ">" }
 op_and = { "and" }
 op_or = { "or" }
-op_not = { "not" }
+op_un = { "not" }
 
 // Expressions
 paren_expr = { "(" ~ items ~ ")" }
@@ -44,8 +44,8 @@ expr_insert = { term ~ (insertion+ | NEWLINE ~ (insertion+ ~ NEWLINE)+ ~ "end" )
 expr_call_single = { expr_insert+ }
 chain_call = { "," ~ NEWLINE? }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* ~ chain_call? }
-expr_not = { op_not? ~ expr_call }
-expr_mdr = { expr_not ~ (op_mdr ~ expr_not)* }
+expr_un = { op_un? ~ expr_call }
+expr_mdr = { expr_un ~ (op_mdr ~ expr_un)* }
 expr_as = { expr_mdr ~ (op_as ~ expr_mdr)* }
 expr_cmp = { expr_as ~ (op_comp ~ expr_as)* }
 expr_and = { expr_cmp ~ (NEWLINE? ~ op_and ~ NEWLINE? ~ expr_cmp)* }

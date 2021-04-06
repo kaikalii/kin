@@ -202,6 +202,7 @@ fn parse_expr_not(pair: Pair<Rule>) -> ParseResult<Node> {
     let first = pairs.next().unwrap();
     let op = match first.as_str() {
         "not" => Some(UnOp::Not),
+        "-" => Some(UnOp::Neg),
         _ => None,
     };
     let inner = if op.is_some() {
