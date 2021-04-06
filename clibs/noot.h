@@ -31,7 +31,7 @@ struct NootValue;
 typedef struct NootValue(*NootFn)(int, struct NootValue*);
 
 typedef union NootData {
-    unsigned char Bool;
+    byte Bool;
     unsigned long Nat;
     long Int;
     double Real;
@@ -46,6 +46,11 @@ typedef struct NootValue {
 } NootValue;
 
 const NootValue NOOT_NIL = { .type = Nil };
+
+NootValue new_bool(byte b) {
+    NootValue val = { .type = Bool, .data = {.Bool = b} };
+    return val;
+}
 
 NootValue new_nat(unsigned long i) {
     NootValue val = { .type = Nat, .data = {.Nat = i} };

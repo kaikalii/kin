@@ -216,6 +216,8 @@ impl<'a> CTarget<'a> {
     }
     pub fn compile_term(&mut self, term: Term<'a>) -> String {
         match term {
+            Term::Nil => "NOOT_NIL".into(),
+            Term::Bool(b) => format!("new_bool({})", b as u8),
             Term::Nat(i) => format!("new_nat({})", i),
             Term::Int(i) => format!("new_int({})", i),
             Term::Real(i) => format!("new_real({})", i),
@@ -249,7 +251,6 @@ impl<'a> CTarget<'a> {
                 self.compile_items(items, true);
                 self.block_vals.pop_front().unwrap()
             }
-            term => todo!("{:?}", term),
         }
     }
 }
