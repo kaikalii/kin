@@ -1,45 +1,91 @@
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
+    fmt,
     fs::{self, File},
     io::{self, Write},
     iter::once,
 };
 
-use crate::{ast::*, resolve::*};
+use indexmap::IndexMap;
+use pest::{
+    error::{Error as PestError, ErrorVariant},
+    Span,
+};
+
+use crate::{ast::*, parse::Rule};
+
+type ShadowStack = Vec<String>;
+type NootScope = HashMap<String, ShadowStack>;
+type NootScopes = Vec<NootScope>;
+type CScope = HashSet<String>;
+type CScopes = Vec<CScope>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum CompileErrorKind {
+    #[error("Unknown definition {}", _0)]
+    UnknownDef(String),
+}
+
+impl CompileErrorKind {
+    pub fn span(self, span: Span) -> CompileError {
+        CompileError { kind: self, span }
+    }
+}
+
+#[derive(Debug)]
+pub struct CompileError<'a> {
+    pub kind: CompileErrorKind,
+    pub span: Span<'a>,
+}
+
+impl<'a> fmt::Display for CompileError<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let error = PestError::<Rule>::new_from_span(
+            ErrorVariant::CustomError {
+                message: self.kind.to_string(),
+            },
+            self.span.clone(),
+        );
+        write!(f, "{}", error)
+    }
+}
 
 pub struct CTarget<'a> {
-    pub res: Resolver<'a>,
     pub name: String,
     pub header_includes: HashSet<String>,
     pub source_includes: HashSet<String>,
     pub other_c_lib_files: HashSet<String>,
-    pub functions: Vec<CFunction>,
-    pub curr_function: Vec<usize>,
+    pub c_functions: IndexMap<String, CFunction>,
+    pub curr_c_function: Vec<String>,
     pub block_vals: VecDeque<String>,
+    pub noot_scopes: NootScopes,
     pub main: bool,
     pub indent: usize,
+    pub errors: Vec<CompileError<'a>>,
 }
 
 pub struct CFunction {
     pub sig: String,
     pub body: String,
+    pub scopes: CScopes,
 }
 
 impl<'a> CTarget<'a> {
     pub fn new(name: &str, main: bool) -> Self {
-        let (functions, curr_function) = if main {
-            (
-                vec![CFunction {
+        let mut c_functions = IndexMap::new();
+        let mut curr_function = Vec::new();
+        if main {
+            c_functions.insert(
+                "main".into(),
+                CFunction {
                     sig: "int main()".into(),
                     body: String::new(),
-                }],
-                vec![0],
-            )
-        } else {
-            (Vec::new(), Vec::new())
-        };
+                    scopes: vec![CScope::new()],
+                },
+            );
+            curr_function.push("main".into());
+        }
         CTarget {
-            res: Resolver::new(),
             name: name.into(),
             main,
             header_includes: once("noot.h".into()).collect(),
@@ -48,9 +94,34 @@ impl<'a> CTarget<'a> {
                 .into_iter()
                 .collect(),
             block_vals: VecDeque::new(),
-            functions,
-            curr_function,
+            noot_scopes: vec![NootScope::new()],
+            c_functions,
+            curr_c_function: curr_function,
             indent: 1,
+            errors: Vec::new(),
+        }
+    }
+    pub fn c_name_exists(&self, c_name: &str, function: bool) -> bool {
+        function && self.c_functions.contains_key(c_name)
+            || !function
+                && self
+                    .curr_c_function()
+                    .scopes
+                    .iter()
+                    .any(|scope| scope.contains(c_name))
+    }
+    pub fn c_name_for(&self, name: &str, function: bool) -> String {
+        if self.c_name_exists(&name, function) {
+            let mut i = 2;
+            loop {
+                let potential = format!("{}{}", name, i);
+                if !self.c_name_exists(&potential, function) {
+                    break potential;
+                }
+                i += 1;
+            }
+        } else {
+            name.into()
         }
     }
     pub fn write(self) -> io::Result<()> {
@@ -90,7 +161,7 @@ impl<'a> CTarget<'a> {
 
         // Write functions
         // Write declarations
-        for function in &self.functions {
+        for function in self.c_functions.values() {
             if let Some(header) = &mut header {
                 writeln!(header, "{};", function.sig)?;
             } else {
@@ -99,10 +170,10 @@ impl<'a> CTarget<'a> {
         }
         writeln!(source)?;
         // Write definitions
-        for function in &self.functions {
+        for (name, function) in &self.c_functions {
             writeln!(source, "{} {{", function.sig)?;
             write!(source, "{}", function.body)?;
-            if function.sig.starts_with("int main") {
+            if name == "main" {
                 writeln!(source, "    return 0;")?;
             }
             writeln!(source, "}}\n")?;
@@ -134,19 +205,31 @@ impl<'a> CTarget<'a> {
             }
         }
     }
+    fn curr_c_function(&self) -> &CFunction {
+        self.c_functions
+            .get(self.curr_c_function.last().unwrap())
+            .unwrap()
+    }
+    fn curr_c_function_mut(&mut self) -> &mut CFunction {
+        self.c_functions
+            .get_mut(self.curr_c_function.last().unwrap())
+            .unwrap()
+    }
     fn body(&mut self) -> &mut String {
-        &mut self.functions[*self.curr_function.last().unwrap()].body
+        &mut self.curr_c_function_mut().body
+    }
+    fn top_noot_scope(&mut self) -> &mut NootScope {
+        self.noot_scopes.last_mut().unwrap()
+    }
+    fn top_c_scope(&mut self) -> &mut CScope {
+        self.curr_c_function_mut().scopes.last_mut().unwrap()
     }
     pub fn compile_def(&mut self, def: Def<'a>) {
         // Push a scope for this def
-        self.res.push_scope();
-        let c_name = self.res.c_name_for(&def.ident.name);
-        if def.params.params.is_empty() {
-            // Variable
-            self.compile_items(def.items.clone(), true);
-            let expr = self.block_vals.pop_front().unwrap();
-            self.push_line(format!("NootValue {} = {};\n", c_name, expr));
-        } else {
+        self.noot_scopes.push(NootScope::default());
+        let is_function = !def.params.params.is_empty();
+        let c_name = self.c_name_for(&def.ident.name, is_function);
+        if is_function {
             // Function
             let mut params = String::new();
             for (i, param) in def.params.params.iter().enumerate() {
@@ -155,23 +238,39 @@ impl<'a> CTarget<'a> {
                 }
                 params += "NootValue ";
                 params += &param.ident.name;
-                self.res.push_param_def(&param.ident.name, i);
+                self.top_noot_scope()
+                    .entry(param.ident.name.clone())
+                    .or_default()
+                    .push(format!("args[{}]", i));
             }
             let sig = format!("NootValue {}(int count, NootValue* args)", c_name);
-            self.curr_function.push(self.functions.len());
-            self.functions.push(CFunction {
-                sig,
-                body: String::new(),
-            });
+            self.curr_c_function.push(c_name.clone());
+            self.c_functions.insert(
+                c_name.clone(),
+                CFunction {
+                    sig,
+                    body: String::new(),
+                    scopes: vec![CScope::new()],
+                },
+            );
             self.compile_items(def.items.clone(), true);
             let ret = self.block_vals.pop_front().unwrap();
             self.push_line(format!("return {};", ret));
-            self.curr_function.pop();
+            self.curr_c_function.pop();
+        } else {
+            // Variable
+            self.top_c_scope().insert(c_name.clone());
+            self.compile_items(def.items.clone(), true);
+            let expr = self.block_vals.pop_front().unwrap();
+            self.push_line(format!("NootValue {} = {};", c_name, expr));
         }
         // Pop the def's scope
-        self.res.pop_scope();
+        self.noot_scopes.pop();
         // Push the def into its enclosing scope
-        self.res.push_noot_def(c_name, def);
+        self.top_noot_scope()
+            .entry(def.ident.name)
+            .or_default()
+            .push(c_name);
     }
     #[must_use]
     pub fn compile_node(&mut self, node: Node<'a>) -> String {
@@ -186,8 +285,11 @@ impl<'a> CTarget<'a> {
     pub fn compile_bin_expr(&mut self, expr: BinExpr<'a>) -> String {
         let noot_fn = match expr.op {
             BinOp::Or | BinOp::And => {
-                let temp_name = self.res.c_name_for("temp");
-                self.res.push_c_def("temp", &temp_name);
+                let temp_name = self.c_name_for("temp", false);
+                self.top_noot_scope()
+                    .entry(temp_name.clone())
+                    .or_default()
+                    .push(temp_name.clone());
                 let left = self.compile_node(*expr.left);
                 self.push_line(format!("NootValue {} = {};", temp_name, left));
                 self.push_line(format!(
@@ -251,29 +353,24 @@ impl<'a> CTarget<'a> {
             Term::Int(i) => format!("new_int({})", i),
             Term::Real(i) => format!("new_real({})", i),
             Term::String(s) => format!("new_string({:?}, {})", s, s.len()),
-            Term::Ident(ident) => match self.res.find_def(&ident.name).cloned() {
-                Some(def) => match def {
-                    CompileDef::C(name) => format!("new_function(&{})", name),
-                    CompileDef::Noot { name, def } => {
-                        if def.params.params.is_empty() {
-                            name
-                        } else {
-                            format!("new_function(&{})", name)
-                        }
-                    }
-                    CompileDef::Param(i) => format!("args[{}]", i),
-                },
-                None => {
-                    self.res.errors.push(
-                        ResolutionErrorKind::UnknownDef(ident.name.clone())
-                            .span(ident.span.clone()),
+            Term::Ident(ident) => {
+                let c_name = self
+                    .noot_scopes
+                    .iter()
+                    .rev()
+                    .find_map(|scope| scope.get(&ident.name).and_then(|ss| ss.last()));
+                if let Some(c_name) = c_name {
+                    c_name.clone()
+                } else {
+                    self.errors.push(
+                        CompileErrorKind::UnknownDef(ident.name.clone()).span(ident.span.clone()),
                     );
                     String::new()
                 }
-            },
+            }
             Term::Closure(_) => {
-                self.res.push_scope();
-                self.res.pop_scope();
+                self.noot_scopes.push(NootScope::default());
+                self.noot_scopes.pop();
                 todo!()
             }
             Term::Expr(items) => {

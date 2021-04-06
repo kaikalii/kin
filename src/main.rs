@@ -3,7 +3,6 @@
 mod ast;
 mod compile;
 mod parse;
-mod resolve;
 
 fn main() {
     use std::process::Command;
@@ -21,7 +20,7 @@ fn main() {
 
             let mut target = CTarget::new("main", true);
             target.compile_items(items, false);
-            if target.res.errors.is_empty() {
+            if target.errors.is_empty() {
                 println!("No resolution errors");
                 target.write().unwrap();
                 Command::new("gcc")
@@ -33,7 +32,7 @@ fn main() {
                     .wait()
                     .unwrap();
             } else {
-                for error in &target.res.errors {
+                for error in &target.errors {
                     println!("{}", error);
                 }
             }

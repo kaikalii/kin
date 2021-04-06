@@ -278,6 +278,7 @@ dependencies = [
  "color-backtrace",
  "colored",
  "derive_more",
+ "indexmap",
  "itertools",
  "pest",
  "pest_derive",
