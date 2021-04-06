@@ -355,42 +355,33 @@ fn parse_string_literal(pair: Pair<Rule>) -> std::string::String {
     for pair in pair.into_inner() {
         match pair.as_rule() {
             Rule::raw_string => s.push_str(pair.as_str()),
-            Rule::escape => {
-                let pair = only(pair);
-                match pair.as_rule() {
-                    Rule::predefined => s.push(match pair.as_str() {
-                        "0" => '\0',
-                        "r" => '\r',
-                        "t" => '\t',
-                        "n" => '\n',
-                        "\\" => '\\',
-                        "'" => '\'',
-                        "\"" => '"',
-                        s => unreachable!("{}", s),
-                    }),
-                    Rule::byte => {
-                        let byte = pair
-                            .into_inner()
-                            .map(|pair| pair.as_str())
-                            .collect::<String>()
-                            .parse::<u8>()
-                            .unwrap();
-                        s.push(byte as char);
-                    }
-                    Rule::unicode => {
-                        let u = pair
-                            .into_inner()
-                            .map(|pair| pair.as_str())
-                            .collect::<String>()
-                            .parse::<u32>()
-                            .unwrap();
-                        s.push(
-                            std::char::from_u32(u)
-                                .unwrap_or_else(|| panic!("invalid unicode {}", u)),
-                        );
-                    }
-                    rule => unreachable!("{:?}", rule),
-                }
+            Rule::predefined => s.push(match pair.as_str() {
+                "0" => '\0',
+                "r" => '\r',
+                "t" => '\t',
+                "n" => '\n',
+                "\\" => '\\',
+                "'" => '\'',
+                "\"" => '"',
+                s => unreachable!("{}", s),
+            }),
+            Rule::byte => {
+                let byte = pair
+                    .into_inner()
+                    .map(|pair| pair.as_str())
+                    .collect::<String>()
+                    .parse::<u8>()
+                    .unwrap();
+                s.push(byte as char);
+            }
+            Rule::unicode => {
+                let u = pair
+                    .into_inner()
+                    .map(|pair| pair.as_str())
+                    .collect::<String>()
+                    .parse::<u32>()
+                    .unwrap();
+                s.push(std::char::from_u32(u).unwrap_or_else(|| panic!("invalid unicode {}", u)));
             }
             rule => unreachable!("{:?}", rule),
         }
