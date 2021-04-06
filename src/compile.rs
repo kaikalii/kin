@@ -254,10 +254,18 @@ impl<'a> CTarget<'a> {
         self.curr_c_function_mut().scopes.last_mut().unwrap()
     }
     pub fn compile_def(&mut self, def: Def<'a>) {
-        // Push a scope for this def
-        self.noot_scopes.push(NootScope::default());
         let is_function = !def.params.params.is_empty();
         let c_name = self.c_name_for(&def.ident.name, is_function);
+        // Push the def into its enclosing scope
+        self.top_noot_scope()
+            .entry(def.ident.name.clone())
+            .or_default()
+            .push(CompileDef::Noot {
+                c_name: c_name.clone(),
+                def: def.clone(),
+            });
+        // Push a scope for this def
+        self.noot_scopes.push(NootScope::default());
         if is_function {
             // Function
             let mut params = String::new();
@@ -278,7 +286,7 @@ impl<'a> CTarget<'a> {
             let sig = format!("NootValue {}(int count, NootValue* args)", c_name);
             self.curr_c_function.push(c_name.clone());
             self.c_functions.insert(
-                c_name.clone(),
+                c_name,
                 CFunction {
                     sig,
                     body: String::new(),
@@ -298,11 +306,6 @@ impl<'a> CTarget<'a> {
         }
         // Pop the def's scope
         self.noot_scopes.pop();
-        // Push the def into its enclosing scope
-        self.top_noot_scope()
-            .entry(def.ident.name.clone())
-            .or_default()
-            .push(CompileDef::Noot { c_name, def });
     }
     #[must_use]
     pub fn compile_node(&mut self, node: Node<'a>) -> String {

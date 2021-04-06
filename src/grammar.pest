@@ -35,7 +35,7 @@ op_or = { "or" }
 op_un = { "not" }
 
 // Expressions
-paren_expr = { "(" ~ items ~ ")" }
+paren_expr = { "(" ~ NEWLINE? ~ items ~ NEWLINE? ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
 bar = { "|" }

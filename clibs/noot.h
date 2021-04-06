@@ -34,7 +34,7 @@ typedef struct NootValue(*NootClosureFn)(int, NootValue*, NootValue*);
 typedef struct NootClosure {
     NootClosureFn f;
     NootValue* captures;
-} NootFunction;
+} NootClosure;
 
 typedef union NootFunctionData {
     NootNormalFn normal;
@@ -91,12 +91,12 @@ NootValue new_real(double i) {
 NootValue new_function(NootNormalFn f) {
     NootValue val = {
         .type = Function,
-        .data = {.Function = {
-            .type = Normal,
-            .data = NootFunctionData {
-                .normal = f
+        .data = {
+            .Function = {
+                .type = Normal,
+                .data = {.normal = f }
             }
-        }}
+        }
     };
     return val;
 }
@@ -104,15 +104,17 @@ NootValue new_function(NootNormalFn f) {
 NootValue new_closure(NootClosureFn f, NootValue* captures) {
     NootValue val = {
         .type = Function,
-        .data = {.Function = {
-            .type = Closure,
-            .data = NootFunctionData {
-                .closure = {
-                    .f = f,
-                    .captures = captures,
+        .data = {
+            .Function = {
+                .type = Closure,
+                .data = {
+                    .closure = {
+                        .f = f,
+                        .captures = captures,
+                    }
                 }
             }
-        }}
+        }
     };
     return val;
 }
@@ -132,7 +134,7 @@ NootValue new_string(byte* s, size_t len) {
 
 NootValue noot_call(NootValue val, int count, NootValue* args) {
     switch (val.type) {
-    case Function:
+    case Function:;
         NootFunction function = val.data.Function;
         switch (function.type) {
         case Normal:
@@ -412,8 +414,8 @@ int noot_lt_impl(NootValue a, NootValue b) {
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     case Function: return b.type == Function
         && a.data.Function.type == b.data.Function.type
-        && (a.data.Function.type < Normal&& a.data.Function.data.normal < b.data.Function.data.normal
-            || a.data.Function.type < Closure&& a.data.Function.data.closure.f < b.data.Function.data.closure.f);
+        && (a.data.Function.type == Normal && a.data.Function.data.normal < b.data.Function.data.normal
+            || a.data.Function.type == Closure && a.data.Function.data.closure.f < b.data.Function.data.closure.f);
     }
 }
 
@@ -455,8 +457,8 @@ int noot_gt_impl(NootValue a, NootValue b) {
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     case Function: return b.type == Function
         && a.data.Function.type == b.data.Function.type
-        && (a.data.Function.type > Normal && a.data.Function.data.normal > b.data.Function.data.normal
-            || a.data.Function.type > Closure && a.data.Function.data.closure.f > b.data.Function.data.closure.f);
+        && (a.data.Function.type == Normal && a.data.Function.data.normal > b.data.Function.data.normal
+            || a.data.Function.type == Closure && a.data.Function.data.closure.f > b.data.Function.data.closure.f);
     }
 }
 
