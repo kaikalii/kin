@@ -23,12 +23,33 @@ typedef enum NootType {
     List,
     Table,
     Function,
-    Error
+    Error,
 } NootType;
 
-struct NootValue;
+typedef struct NootValue NootValue;
 
-typedef struct NootValue(*NootFn)(int, struct NootValue*);
+typedef struct NootValue(*NootNormalFn)(int, NootValue*);
+typedef struct NootValue(*NootClosureFn)(int, NootValue*, NootValue*);
+
+typedef struct NootClosure {
+    NootClosureFn f;
+    NootValue* captures;
+} NootFunction;
+
+typedef union NootFunctionData {
+    NootNormalFn normal;
+    NootClosure closure;
+} NootFunctionData;
+
+typedef enum NootFunctionType {
+    Normal,
+    Closure,
+} NootFunctionType;
+
+typedef struct NootFunction {
+    NootFunctionType type;
+    NootFunctionData data;
+} NootFunction;
 
 typedef union NootData {
     byte Bool;
@@ -36,14 +57,14 @@ typedef union NootData {
     long Int;
     double Real;
     NootString String;
-    NootFn Function;
+    NootFunction Function;
     struct NootValue* Error;
 } NootData;
 
-typedef struct NootValue {
+struct NootValue {
     NootType type;
     NootData data;
-} NootValue;
+};
 
 const NootValue NOOT_NIL = { .type = Nil };
 
@@ -67,8 +88,32 @@ NootValue new_real(double i) {
     return val;
 }
 
-NootValue new_function(NootFn f) {
-    NootValue val = { .type = Function, .data = {.Function = f} };
+NootValue new_function(NootNormalFn f) {
+    NootValue val = {
+        .type = Function,
+        .data = {.Function = {
+            .type = Normal,
+            .data = NootFunctionData {
+                .normal = f
+            }
+        }}
+    };
+    return val;
+}
+
+NootValue new_closure(NootClosureFn f, NootValue* captures) {
+    NootValue val = {
+        .type = Function,
+        .data = {.Function = {
+            .type = Closure,
+            .data = NootFunctionData {
+                .closure = {
+                    .f = f,
+                    .captures = captures,
+                }
+            }
+        }}
+    };
     return val;
 }
 
@@ -88,7 +133,13 @@ NootValue new_string(byte* s, size_t len) {
 NootValue noot_call(NootValue val, int count, NootValue* args) {
     switch (val.type) {
     case Function:
-        return (*val.data.Function)(count, args);
+        NootFunction function = val.data.Function;
+        switch (function.type) {
+        case Normal:
+            return (*function.data.normal)(count, args);
+        case Closure:
+            return (*function.data.closure.f)(count, args, function.data.closure.captures);
+        }
     }
 }
 
@@ -316,7 +367,10 @@ int noot_eq_impl(NootValue a, NootValue b) {
         }
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) == 0;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
-    case Function: return b.type == Function && a.data.Function == b.data.Function;
+    case Function: return b.type == Function
+        && a.data.Function.type == b.data.Function.type
+        && (a.data.Function.type == Normal && a.data.Function.data.normal == b.data.Function.data.normal
+            || a.data.Function.type == Closure && a.data.Function.data.closure.f == b.data.Function.data.closure.f);
     }
 }
 
@@ -356,7 +410,10 @@ int noot_lt_impl(NootValue a, NootValue b) {
         }
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) < 0;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
-    case Function: return b.type == Function && a.data.Function < b.data.Function;
+    case Function: return b.type == Function
+        && a.data.Function.type == b.data.Function.type
+        && (a.data.Function.type < Normal&& a.data.Function.data.normal < b.data.Function.data.normal
+            || a.data.Function.type < Closure&& a.data.Function.data.closure.f < b.data.Function.data.closure.f);
     }
 }
 
@@ -396,7 +453,10 @@ int noot_gt_impl(NootValue a, NootValue b) {
         }
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) > 0;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
-    case Function: return b.type == Function && a.data.Function > b.data.Function;
+    case Function: return b.type == Function
+        && a.data.Function.type == b.data.Function.type
+        && (a.data.Function.type > Normal && a.data.Function.data.normal > b.data.Function.data.normal
+            || a.data.Function.type > Closure && a.data.Function.data.closure.f > b.data.Function.data.closure.f);
     }
 }
 
