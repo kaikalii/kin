@@ -1,0 +1,4 @@
+- Allow for recursive capturing functions
+- Implement lists
+- Implement tables
+- Add iteration
