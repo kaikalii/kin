@@ -1,9 +1,8 @@
 require 'utils'
-require 'lex'
+require 'parse'
 
 local file = io.open('test.noot')
 local input = file:read('a')
-local tokens = lex(input)
 
 t = {1, 2, 3}
 push(t, 4)
