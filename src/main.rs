@@ -3,24 +3,25 @@
 mod ast;
 mod compile;
 mod parse;
+mod transpile;
 
 fn main() {
     use std::process::*;
 
-    use compile::*;
+    use transpile::*;
 
     color_backtrace::install();
 
     let input = std::fs::read_to_string("test.noot").unwrap();
+    // Parse
     match parse::parse(&input) {
         Ok(items) => {
-            println!();
-
-            let mut target = CTarget::new("main", true);
-            target.compile_items(items, false);
-            if target.errors.is_empty() {
+            // Transpile
+            let transpilation = transpile(items);
+            if transpilation.errors.is_empty() {
                 println!("Transpilation succeeded");
-                target.write().unwrap();
+                // Compile
+                transpilation.write().unwrap();
                 let status = Command::new("gcc")
                     .arg("build/main.c")
                     .arg("build/tgc.c")
@@ -34,7 +35,7 @@ fn main() {
                     println!("Compilation succeeded");
                 }
             } else {
-                for error in &target.errors {
+                for error in &transpilation.errors {
                     println!("{}", error);
                 }
             }
