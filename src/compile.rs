@@ -19,7 +19,7 @@ pub enum CompileDef<'a> {
     Noot {
         c_name: String,
         def: Def<'a>,
-        captures: Vec<String>,
+        captures_name: Option<String>,
     },
     C {
         c_name: String,
@@ -35,9 +35,9 @@ impl<'a> CompileDef<'a> {
     }
     pub fn is_function(&self) -> bool {
         match self {
-            CompileDef::Noot { def, captures, .. } => {
-                !def.params.params.is_empty() && captures.is_empty()
-            }
+            CompileDef::Noot {
+                def, captures_name, ..
+            } => !def.params.params.is_empty() && captures_name.is_none(),
             CompileDef::C { function, .. } => *function,
         }
     }
@@ -100,6 +100,7 @@ pub struct CFunction {
     pub sig: String,
     pub body: String,
     pub scopes: CScopes,
+    pub captures_name: Option<String>,
 }
 
 impl<'a> CTarget<'a> {
@@ -113,6 +114,7 @@ impl<'a> CTarget<'a> {
                     sig: "int main(int argc, char** argv)".into(),
                     body: "    tgc_start(&noot_gc, &argc);\n".into(),
                     scopes: vec![CScope::new()],
+                    captures_name: None,
                 },
             );
             curr_function.push("main".into());
@@ -210,10 +212,14 @@ impl<'a> CTarget<'a> {
         // Write functions
         // Write declarations
         for function in self.c_functions.values() {
-            if let Some(header) = &mut header {
-                writeln!(header, "{};", function.sig)?;
+            let target = if let Some(header) = &mut header {
+                header
             } else {
-                writeln!(source, "{};", function.sig)?;
+                &mut source
+            };
+            writeln!(target, "{};", function.sig)?;
+            if let Some(captures_name) = &function.captures_name {
+                writeln!(target, "static NootValue* {};", captures_name)?;
             }
         }
         writeln!(source)?;
@@ -287,7 +293,7 @@ impl<'a> CTarget<'a> {
             CompileDef::Noot {
                 c_name: c_name.clone(),
                 def: def.clone(),
-                captures: Vec::new(),
+                captures_name: None,
             },
         );
         // Push a scope for this def
@@ -409,21 +415,24 @@ impl<'a> CTarget<'a> {
                     .rev()
                     .find_map(|(i, scope)| scope.defs.get(&ident.name).map(|cd| (i, cd.clone())));
                 if let Some((i, compdef)) = compdef {
-                    if i < self.noot_scopes.len() - 1 && !compdef.is_function() {
+                    if let (true, Some(captures_name)) = (
+                        i < self.noot_scopes.len() - 1 && !compdef.is_function(),
+                        self.curr_c_function().captures_name.clone(),
+                    ) {
                         if let Some(i) = self
                             .top_noot_scope()
                             .captures
                             .iter()
                             .position(|c_name| c_name == compdef.name())
                         {
-                            format!("inputs.captures[{}]", i)
+                            format!("{}[{}]", captures_name, i)
                         } else {
                             let i = self.top_noot_scope().captures.len();
                             self.top_noot_scope().captures.push(compdef.name().into());
-                            format!("inputs.captures[{}]", i)
+                            format!("{}[{}]", captures_name, i)
                         }
                     } else if compdef.is_function() {
-                        format!("new_function(&{}, NULL)", compdef.name())
+                        format!("new_function(&{})", compdef.name())
                     } else {
                         compdef.name().into()
                     }
@@ -460,18 +469,20 @@ impl<'a> CTarget<'a> {
             self.insert_def(
                 param.ident.name.clone(),
                 CompileDef::C {
-                    c_name: format!("inputs.args[{}]", i),
+                    c_name: format!("args[{}]", i),
                     function: false,
                 },
             );
         }
-        let sig = format!("NootValue {}(int count, NootInputs inputs)", c_name);
+        let sig = format!("NootValue {}(int count, NootValue* args)", c_name);
+        let captures_name = self.c_name_for(&format!("{}_captures", c_name), false);
         self.c_functions.insert(
             c_name.clone(),
             CFunction {
                 sig,
                 body: String::new(),
                 scopes: vec![CScope::new()],
+                captures_name: Some(captures_name.clone()),
             },
         );
 
@@ -480,33 +491,25 @@ impl<'a> CTarget<'a> {
         self.compile_items(body, true);
         let ret = self.block_vals.pop_front().unwrap();
         self.push_line(format!("return {};", ret));
-        self.curr_c_function.pop();
 
         // Build captures
         let captures = self.top_noot_scope().captures.clone();
         if captures.is_empty() {
-            format!("new_function(&{}, NULL)", c_name)
+            self.curr_c_function_mut().captures_name = None;
+            self.curr_c_function.pop();
+            format!("new_function(&{})", c_name)
         } else {
-            let captures_name = self.c_name_for("captures", false);
+            self.curr_c_function.pop();
             self.push_line(format!(
-                "NootValue* {} = (NootValue*)tgc_alloc(&noot_gc, {} * sizeof(NootValue));",
+                "{} = (NootValue*)tgc_alloc(&noot_gc, {} * sizeof(NootValue));",
                 captures_name,
                 captures.len()
             ));
             for (i, c_name) in captures.iter().enumerate() {
                 self.push_line(format!("{}[{}] = {};", captures_name, i, c_name));
             }
-            self.top_c_scope().insert(captures_name.clone());
-            if let Some(CompileDef::Noot { captures: caps, .. }) = self
-                .noot_scopes
-                .iter_mut()
-                .rev()
-                .find_map(|scope| scope.defs.get_mut(name))
-            {
-                *caps = captures;
-            }
 
-            format!("new_function(&{}, {})", c_name, captures_name)
+            format!("new_function(&{})", c_name)
         }
     }
 }

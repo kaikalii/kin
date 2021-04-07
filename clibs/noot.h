@@ -27,17 +27,7 @@ typedef enum NootType {
 
 typedef struct NootValue NootValue;
 
-typedef struct NootInputs {
-    NootValue* args;
-    NootValue* captures;
-} NootInputs;
-
-typedef NootValue(*NootFn)(int, NootInputs);
-
-typedef struct NootFunction {
-    NootFn f;
-    NootValue* captures;
-} NootFunction;
+typedef NootValue(*NootFn)(int, NootValue* args);
 
 typedef union NootData {
     byte Bool;
@@ -45,7 +35,7 @@ typedef union NootData {
     long Int;
     double Real;
     NootString String;
-    NootFunction Function;
+    NootFn Function;
     struct NootValue* Error;
 } NootData;
 
@@ -71,15 +61,10 @@ NootValue new_real(double i) {
     return val;
 }
 
-NootValue new_function(NootFn f, NootValue* captures) {
+NootValue new_function(NootFn f) {
     NootValue val = {
         .type = Function,
-        .data = {
-            .Function = {
-                .f = f,
-                .captures = captures
-            }
-        }
+        .data = {.Function = f }
     };
     return val;
 }
@@ -99,20 +84,16 @@ NootValue new_string(byte* s, size_t len) {
 
 NootValue noot_call(NootValue val, int count, NootValue* args) {
     switch (val.type) {
-    case Function:;
-        NootInputs inputs = {
-            .args = args,
-            .captures = val.data.Function.captures,
-        };
-        return (*val.data.Function.f)(count, inputs);
+    case Function:
+        return (*val.data.Function)(count, args);
     }
 }
 
-NootValue noot_print(int count, NootInputs inputs) {
+NootValue noot_print(int count, NootValue* args) {
     for (int i = 0; i < count; i++) {
         if (i > 0)
             printf("\t");
-        NootValue val = inputs.args[i];
+        NootValue val = args[i];
         switch (val.type) {
         case Nil:
             break;
@@ -250,7 +231,7 @@ int noot_eq_impl(NootValue a, NootValue b) {
         }
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) == 0;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
-    case Function: return b.type == Function && a.data.Function.f == b.data.Function.f;
+    case Function: return b.type == Function && a.data.Function == b.data.Function;
     }
 }
 
@@ -276,7 +257,7 @@ int noot_lt_impl(NootValue a, NootValue b) {
         }
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) < 0;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
-    case Function: return b.type == Function && a.data.Function.f < b.data.Function.f;
+    case Function: return b.type == Function && a.data.Function < b.data.Function;
     }
 }
 
@@ -302,7 +283,7 @@ int noot_gt_impl(NootValue a, NootValue b) {
         }
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) > 0;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
-    case Function: return b.type == Function && a.data.Function.f > b.data.Function.f;
+    case Function: return b.type == Function && a.data.Function > b.data.Function;
     }
 }
 
