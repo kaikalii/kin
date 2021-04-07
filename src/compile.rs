@@ -43,10 +43,9 @@ impl<'a> CompileDef<'a> {
     }
 }
 
-type ShadowStack<'a> = Vec<CompileDef<'a>>;
 #[derive(Default)]
 pub struct NootScope<'a> {
-    pub defs: HashMap<String, ShadowStack<'a>>,
+    pub defs: HashMap<String, CompileDef<'a>>,
     pub captures: Vec<String>,
 }
 type NootScopes<'a> = Vec<NootScope<'a>>;
@@ -122,10 +121,10 @@ impl<'a> CTarget<'a> {
         for &(noot_name, c_name) in &[("print", "noot_print")] {
             noot_scope.defs.insert(
                 noot_name.into(),
-                vec![CompileDef::C {
+                CompileDef::C {
                     c_name: c_name.into(),
                     function: true,
-                }],
+                },
             );
         }
         CTarget {
@@ -277,15 +276,14 @@ impl<'a> CTarget<'a> {
         let is_function = !def.params.params.is_empty();
         let c_name = self.c_name_for(&def.ident.name, is_function);
         // Push the def into its enclosing scope
-        self.top_noot_scope()
-            .defs
-            .entry(def.ident.name.clone())
-            .or_default()
-            .push(CompileDef::Noot {
+        self.top_noot_scope().defs.insert(
+            def.ident.name.clone(),
+            CompileDef::Noot {
                 c_name: c_name.clone(),
                 def: def.clone(),
                 captures: Vec::new(),
-            });
+            },
+        );
         // Push a scope for this def
         self.noot_scopes.push(NootScope::default());
         if is_function {
@@ -294,14 +292,13 @@ impl<'a> CTarget<'a> {
             let c_name = self.c_name_for(&def.ident.name, is_function);
             // Pop the def's scope
             self.noot_scopes.pop();
-            self.top_noot_scope()
-                .defs
-                .entry(def.ident.name)
-                .or_default()
-                .push(CompileDef::C {
+            self.top_noot_scope().defs.insert(
+                def.ident.name,
+                CompileDef::C {
                     c_name: c_name.clone(),
                     function: false,
-                });
+                },
+            );
             self.push_line(format!("NootValue {} = {};", c_name, expr));
         } else {
             // Variable
@@ -327,14 +324,13 @@ impl<'a> CTarget<'a> {
         let noot_fn = match expr.op {
             BinOp::Or | BinOp::And => {
                 let temp_name = self.c_name_for("temp", false);
-                self.top_noot_scope()
-                    .defs
-                    .entry(temp_name.clone())
-                    .or_default()
-                    .push(CompileDef::C {
+                self.top_noot_scope().defs.insert(
+                    temp_name.clone(),
+                    CompileDef::C {
                         c_name: temp_name.clone(),
                         function: false,
-                    });
+                    },
+                );
                 let left = self.compile_node(*expr.left);
                 self.push_line(format!("NootValue {} = {};", temp_name, left));
                 self.push_line(format!(
@@ -404,12 +400,7 @@ impl<'a> CTarget<'a> {
                     .iter()
                     .enumerate()
                     .rev()
-                    .find_map(|(i, scope)| {
-                        scope
-                            .defs
-                            .get(&ident.name)
-                            .and_then(|ss| ss.last().map(|cd| (i, cd.clone())))
-                    });
+                    .find_map(|(i, scope)| scope.defs.get(&ident.name).map(|cd| (i, cd.clone())));
                 if let Some((i, compdef)) = compdef {
                     if i < self.noot_scopes.len() - 1 {
                         if let Some(i) = self
@@ -459,14 +450,13 @@ impl<'a> CTarget<'a> {
             }
             params_str += "NootValue ";
             params_str += &param.ident.name;
-            self.top_noot_scope()
-                .defs
-                .entry(param.ident.name.clone())
-                .or_default()
-                .push(CompileDef::C {
+            self.top_noot_scope().defs.insert(
+                param.ident.name.clone(),
+                CompileDef::C {
                     c_name: format!("args[{}]", i),
                     function: false,
-                });
+                },
+            );
         }
         let sig = format!(
             "NootValue {}(int count, NootValue* args, NootValue* captures)",
@@ -507,7 +497,7 @@ impl<'a> CTarget<'a> {
                 .noot_scopes
                 .iter_mut()
                 .rev()
-                .find_map(|scope| scope.defs.get_mut(name).and_then(|ss| ss.last_mut()))
+                .find_map(|scope| scope.defs.get_mut(name))
             {
                 *caps = captures;
             }
