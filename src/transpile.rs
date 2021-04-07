@@ -76,7 +76,7 @@ fn transpile_items<'a>(
     state: TranspileState,
     result: Transpilation<'a>,
 ) -> Transpilation<'a> {
-    items.items.into_iter().fold(result, |result, item| {
+    items.into_iter().fold(result, |result, item| {
         transpile_item(item, state.clone(), result)
     })
 }
@@ -87,7 +87,26 @@ fn transpile_item<'a>(
     result: Transpilation<'a>,
 ) -> Transpilation<'a> {
     match item {
-        Item::Def(_) => todo!(),
-        Item::Node(_) => todo!(),
+        Item::Def(def) => transpile_def(def, state, result),
+        Item::Node(node) => transpile_node(node, state, result),
     }
+}
+
+fn transpile_def<'a>(
+    def: Def<'a>,
+    state: TranspileState,
+    result: Transpilation<'a>,
+) -> Transpilation<'a> {
+    if def.is_function() {
+    } else {
+    }
+    todo!()
+}
+
+fn transpile_node<'a>(
+    node: Node<'a>,
+    state: TranspileState,
+    result: Transpilation<'a>,
+) -> Transpilation<'a> {
+    todo!()
 }

@@ -2,7 +2,6 @@
 
 use std::fmt;
 
-use colored::Colorize;
 use derive_more::Display;
 use itertools::Itertools;
 use pest::Span;
@@ -33,13 +32,18 @@ pub enum Item<'a> {
     Def(Def<'a>),
 }
 
-#[derive(Debug, Display, Clone)]
-#[display(
-    fmt = "{}",
-    r#"items.iter().map(ToString::to_string).intersperse("\n\n".into()).collect::<String>()"#
-)]
-pub struct Items<'a> {
-    pub items: Vec<Item<'a>>,
+pub type Items<'a> = Vec<Item<'a>>;
+
+fn format_items(f: &mut fmt::Formatter, items: &[Item]) -> fmt::Result {
+    if items.len() == 1 {
+        write!(f, "{}", items[0])?;
+    } else {
+        for item in items {
+            write!(f, "\n    {}", item)?;
+        }
+        write!(f, "\nend")?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -53,14 +57,17 @@ impl<'a> fmt::Display for Param<'a> {
     }
 }
 
-#[derive(Debug, Display, Clone)]
-#[display(
-    fmt = "{}",
-    r#"params.iter().map(ToString::to_string).intersperse(" ".into()).collect::<String>()"#
-)]
-pub struct Params<'a> {
-    pub params: Vec<Param<'a>>,
+fn format_params(f: &mut fmt::Formatter, params: &[Param]) -> fmt::Result {
+    for (i, param) in params.iter().enumerate() {
+        if i > 0 {
+            write!(f, " ")?;
+        }
+        write!(f, "{}", param)?;
+    }
+    Ok(())
 }
+
+type Params<'a> = Vec<Param<'a>>;
 
 #[derive(Debug, Clone)]
 pub struct Def<'a> {
@@ -69,17 +76,24 @@ pub struct Def<'a> {
     pub items: Items<'a>,
 }
 
+impl<'a> Def<'a> {
+    pub fn is_function(&self) -> bool {
+        !self.params.is_empty()
+    }
+}
+
 impl<'a> fmt::Display for Def<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.ident)?;
-        if !self.params.params.is_empty() {
-            write!(f, " {}", self.params)?;
+        if !self.params.is_empty() {
+            write!(f, " ")?;
+            format_params(f, &self.params)?;
         }
         write!(f, " = ")?;
-        if self.items.items.len() == 1 {
-            write!(f, "{}", self.items.items[0])?;
+        if self.items.len() == 1 {
+            write!(f, "{}", self.items[0])?;
         } else {
-            for item in &self.items.items {
+            for item in &self.items {
                 write!(f, "\n    {}", item)?;
             }
             write!(f, "\nend")?;
@@ -286,23 +300,31 @@ impl<'a> fmt::Display for InsertExpr<'a> {
     }
 }
 
-#[derive(Debug, Display, Clone)]
+#[derive(Debug, Clone)]
 pub enum Term<'a> {
-    #[display(fmt = "({})", _0)]
     Expr(Items<'a>),
-    #[display(fmt = "{}", "_0.to_string().blue()")]
     Int(i64),
-    #[display(fmt = "{}", "_0.to_string().blue()")]
     Real(f64),
-    #[display(fmt = "{}", "_0.to_string().bright_white()")]
     Ident(Ident<'a>),
-    #[display(fmt = "{}", "_0.to_string().blue()")]
     Bool(bool),
-    #[display(fmt = "{}", "format!(\"{:?}\", _0).yellow()")]
     String(String),
     Closure(Box<Closure<'a>>),
-    #[display(fmt = "{}", "\"nil\".blue()")]
     Nil,
+}
+
+impl<'a> fmt::Display for Term<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Term::Expr(items) => format_items(f, items),
+            Term::Int(i) => i.fmt(f),
+            Term::Real(i) => i.fmt(f),
+            Term::Ident(ident) => ident.fmt(f),
+            Term::Bool(b) => b.fmt(f),
+            Term::String(s) => write!(f, "{:?}", s),
+            Term::Closure(closure) => closure.fmt(f),
+            Term::Nil => "nil".fmt(f),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -313,6 +335,9 @@ pub struct Closure<'a> {
 
 impl<'a> fmt::Display for Closure<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} | {}", self.params, self.body)
+        format_params(f, &self.params)?;
+        write!(f, " | ")?;
+        format_items(f, &self.body)?;
+        Ok(())
     }
 }

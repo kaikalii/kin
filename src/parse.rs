@@ -46,7 +46,7 @@ fn parse_items(pair: Pair<Rule>) -> ParseResult<Items> {
             rule => unreachable!("{:?}", rule),
         }
     }
-    Ok(Items { items })
+    Ok(items)
 }
 
 fn parse_item(pair: Pair<Rule>) -> ParseResult<Item> {
@@ -87,14 +87,12 @@ fn parse_def(pair: Pair<Rule>) -> ParseResult<Def> {
     let pair = pairs.next().unwrap();
     let items = match pair.as_rule() {
         Rule::items => parse_items(pair)?,
-        Rule::expr => Items {
-            items: vec![Item::Node(parse_expr(pair)?)],
-        },
+        Rule::expr => vec![Item::Node(parse_expr(pair)?)],
         rule => unreachable!("{:?}", rule),
     };
     Ok(Def {
         ident,
-        params: Params { params },
+        params,
         items,
     })
 }
@@ -338,18 +336,10 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
             let pair = pairs.next().unwrap();
             let body = match pair.as_rule() {
                 Rule::items => parse_items(pair)?,
-                Rule::expr => Items {
-                    items: vec![Item::Node(parse_expr(pair)?)],
-                },
+                Rule::expr => vec![Item::Node(parse_expr(pair)?)],
                 rule => unreachable!("{:?}", rule),
             };
-            Term::Closure(
-                Closure {
-                    params: Params { params },
-                    body,
-                }
-                .into(),
-            )
+            Term::Closure(Closure { params, body }.into())
         }
         rule => unreachable!("{:?}", rule),
     })

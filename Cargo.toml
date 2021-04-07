@@ -8,7 +8,6 @@ version = '0.1.0'
 clap.features = ['derive']
 clap.version = '3.0.0-beta.2'
 color-backtrace = '0.5'
-colored = '2'
 derive_more = '0.99'
 indexmap = '1'
 itertools = '0.10'
