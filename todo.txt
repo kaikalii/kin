@@ -1,4 +1,4 @@
-- Allow for recursive capturing functions
+- Fix multilevel captures
 - Implement lists
 - Implement tables
 - Add iteration
