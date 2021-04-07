@@ -311,7 +311,6 @@ fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {
         };
     }
     Ok(match pair.as_rule() {
-        Rule::nat => number_literal!(Nat)?,
         Rule::int => number_literal!(Int)?,
         Rule::real => number_literal!(Real)?,
         Rule::nil => Term::Nil,

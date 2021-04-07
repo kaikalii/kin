@@ -16,7 +16,6 @@ typedef struct NootString {
 typedef enum NootType {
     Nil,
     Bool,
-    Nat,
     Int,
     Real,
     String,
@@ -59,11 +58,6 @@ const NootValue NOOT_NIL = { .type = Nil };
 
 NootValue new_bool(byte b) {
     NootValue val = { .type = Bool, .data = {.Bool = b} };
-    return val;
-}
-
-NootValue new_nat(unsigned long i) {
-    NootValue val = { .type = Nat, .data = {.Nat = i} };
     return val;
 }
 
@@ -126,9 +120,6 @@ NootValue noot_print(int count, NootInputs inputs) {
             if (val.data.Bool) printf("true");
             else printf("false");
             break;
-        case Nat:
-            printf("%d", val.data.Nat);
-            break;
         case Int:
             printf("%d", val.data.Int);
             break;
@@ -144,19 +135,8 @@ NootValue noot_print(int count, NootInputs inputs) {
 
 NootValue noot_add(NootValue a, NootValue b) {
     switch (a.type) {
-    case Nat:
-        switch (b.type) {
-        case Nat:
-            return new_nat(a.data.Nat + b.data.Nat);
-        case Int:
-            return new_int(a.data.Nat + b.data.Int);
-        case Real:
-            return new_real(a.data.Nat + b.data.Real);
-        }
     case Int:
         switch (b.type) {
-        case Nat:
-            return new_int(a.data.Int + b.data.Nat);
         case Int:
             return new_int(a.data.Int + b.data.Int);
         case Real:
@@ -164,8 +144,6 @@ NootValue noot_add(NootValue a, NootValue b) {
         }
     case Real:
         switch (b.type) {
-        case Nat:
-            return new_real(a.data.Real + b.data.Nat);
         case Int:
             return new_real(a.data.Real + b.data.Int);
         case Real:
@@ -176,19 +154,8 @@ NootValue noot_add(NootValue a, NootValue b) {
 
 NootValue noot_sub(NootValue a, NootValue b) {
     switch (a.type) {
-    case Nat:
-        switch (b.type) {
-        case Nat:
-            return new_nat(a.data.Nat - b.data.Nat);
-        case Int:
-            return new_int(a.data.Nat - b.data.Int);
-        case Real:
-            return new_real(a.data.Nat - b.data.Real);
-        }
     case Int:
         switch (b.type) {
-        case Nat:
-            return new_int(a.data.Int - b.data.Nat);
         case Int:
             return new_int(a.data.Int - b.data.Int);
         case Real:
@@ -196,8 +163,6 @@ NootValue noot_sub(NootValue a, NootValue b) {
         }
     case Real:
         switch (b.type) {
-        case Nat:
-            return new_real(a.data.Real - b.data.Nat);
         case Int:
             return new_real(a.data.Real - b.data.Int);
         case Real:
@@ -208,19 +173,8 @@ NootValue noot_sub(NootValue a, NootValue b) {
 
 NootValue noot_mul(NootValue a, NootValue b) {
     switch (a.type) {
-    case Nat:
-        switch (b.type) {
-        case Nat:
-            return new_nat(a.data.Nat * b.data.Nat);
-        case Int:
-            return new_int(a.data.Nat * b.data.Int);
-        case Real:
-            return new_real(a.data.Nat * b.data.Real);
-        }
     case Int:
         switch (b.type) {
-        case Nat:
-            return new_int(a.data.Int * b.data.Nat);
         case Int:
             return new_int(a.data.Int * b.data.Int);
         case Real:
@@ -228,8 +182,6 @@ NootValue noot_mul(NootValue a, NootValue b) {
         }
     case Real:
         switch (b.type) {
-        case Nat:
-            return new_real(a.data.Real * b.data.Nat);
         case Int:
             return new_real(a.data.Real * b.data.Int);
         case Real:
@@ -240,19 +192,8 @@ NootValue noot_mul(NootValue a, NootValue b) {
 
 NootValue noot_div(NootValue a, NootValue b) {
     switch (a.type) {
-    case Nat:
-        switch (b.type) {
-        case Nat:
-            return new_nat(a.data.Nat / b.data.Nat);
-        case Int:
-            return new_int(a.data.Nat / b.data.Int);
-        case Real:
-            return new_real(a.data.Nat / b.data.Real);
-        }
     case Int:
         switch (b.type) {
-        case Nat:
-            return new_int(a.data.Int / b.data.Nat);
         case Int:
             return new_int(a.data.Int / b.data.Int);
         case Real:
@@ -260,8 +201,6 @@ NootValue noot_div(NootValue a, NootValue b) {
         }
     case Real:
         switch (b.type) {
-        case Nat:
-            return new_real(a.data.Real / b.data.Nat);
         case Int:
             return new_real(a.data.Real / b.data.Int);
         case Real:
@@ -272,19 +211,8 @@ NootValue noot_div(NootValue a, NootValue b) {
 
 NootValue noot_rem(NootValue a, NootValue b) {
     switch (a.type) {
-    case Nat:
-        switch (b.type) {
-        case Nat:
-            return new_nat(a.data.Nat % b.data.Nat);
-        case Int:
-            return new_int(a.data.Nat % b.data.Int);
-        case Real:
-            return new_real(fmod(a.data.Nat, b.data.Real));
-        }
     case Int:
         switch (b.type) {
-        case Nat:
-            return new_int(a.data.Int % b.data.Nat);
         case Int:
             return new_int(a.data.Int % b.data.Int);
         case Real:
@@ -292,8 +220,6 @@ NootValue noot_rem(NootValue a, NootValue b) {
         }
     case Real:
         switch (b.type) {
-        case Nat:
-            return new_real(fmod(a.data.Real, b.data.Nat));
         case Int:
             return new_real(fmod(a.data.Real, b.data.Int));
         case Real:
@@ -306,20 +232,8 @@ int noot_eq_impl(NootValue a, NootValue b) {
     switch (a.type) {
     case Nil: return b.type == Nil;
     case Bool: return b.type == Bool && a.data.Bool == b.data.Bool;
-    case Nat:
-        switch (b.type) {
-        case Nat:
-            return a.data.Nat == b.data.Nat;
-        case Int:
-            return a.data.Nat == b.data.Int;
-        case Real:
-            return a.data.Nat == b.data.Real;
-        default: return 0;
-        }
     case Int:
         switch (b.type) {
-        case Nat:
-            return a.data.Int == b.data.Nat;
         case Int:
             return a.data.Int == b.data.Int;
         case Real:
@@ -328,8 +242,6 @@ int noot_eq_impl(NootValue a, NootValue b) {
         }
     case Real:
         switch (b.type) {
-        case Nat:
-            return a.data.Real == b.data.Nat;
         case Int:
             return a.data.Real == b.data.Int;
         case Real:
@@ -346,20 +258,8 @@ int noot_lt_impl(NootValue a, NootValue b) {
     switch (a.type) {
     case Nil: return 0;
     case Bool: return b.type == Bool && a.data.Bool < b.data.Bool;
-    case Nat:
-        switch (b.type) {
-        case Nat:
-            return a.data.Nat < b.data.Nat;
-        case Int:
-            return a.data.Nat < b.data.Int;
-        case Real:
-            return a.data.Nat < b.data.Real;
-        default: return 0;
-        }
     case Int:
         switch (b.type) {
-        case Nat:
-            return a.data.Int < b.data.Nat;
         case Int:
             return a.data.Int < b.data.Int;
         case Real:
@@ -368,8 +268,6 @@ int noot_lt_impl(NootValue a, NootValue b) {
         }
     case Real:
         switch (b.type) {
-        case Nat:
-            return a.data.Real < b.data.Nat;
         case Int:
             return a.data.Real < b.data.Int;
         case Real:
@@ -386,20 +284,8 @@ int noot_gt_impl(NootValue a, NootValue b) {
     switch (a.type) {
     case Nil: return 0;
     case Bool: return b.type == Bool && a.data.Bool > b.data.Bool;
-    case Nat:
-        switch (b.type) {
-        case Nat:
-            return a.data.Nat > b.data.Nat;
-        case Int:
-            return a.data.Nat > b.data.Int;
-        case Real:
-            return a.data.Nat > b.data.Real;
-        default: return 0;
-        }
     case Int:
         switch (b.type) {
-        case Nat:
-            return a.data.Int > b.data.Nat;
         case Int:
             return a.data.Int > b.data.Int;
         case Real:
@@ -408,8 +294,6 @@ int noot_gt_impl(NootValue a, NootValue b) {
         }
     case Real:
         switch (b.type) {
-        case Nat:
-            return a.data.Real > b.data.Nat;
         case Int:
             return a.data.Real > b.data.Int;
         case Real:
@@ -448,9 +332,8 @@ NootValue noot_ge(NootValue a, NootValue b) {
 
 NootValue noot_neg(NootValue val) {
     switch (val.type) {
-    case Nat: return new_nat(-val.data.Nat);
-    case Int: return new_nat(-val.data.Int);
-    case Real: return new_nat(-val.data.Real);
+    case Int: return new_int(-val.data.Int);
+    case Real: return new_real(-val.data.Real);
     }
 }
 

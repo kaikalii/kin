@@ -398,7 +398,6 @@ impl<'a> CTarget<'a> {
         match term {
             Term::Nil => "NOOT_NIL".into(),
             Term::Bool(b) => format!("new_bool({})", b as u8),
-            Term::Nat(i) => format!("new_nat({})", i),
             Term::Int(i) => format!("new_int({})", i),
             Term::Real(i) => format!("new_real({})", i),
             Term::String(s) => format!("new_string({:?}, {})", s, s.len()),

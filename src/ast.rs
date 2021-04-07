@@ -291,8 +291,6 @@ pub enum Term<'a> {
     #[display(fmt = "({})", _0)]
     Expr(Items<'a>),
     #[display(fmt = "{}", "_0.to_string().blue()")]
-    Nat(u64),
-    #[display(fmt = "{}", "_0.to_string().blue()")]
     Int(i64),
     #[display(fmt = "{}", "_0.to_string().blue()")]
     Real(f64),
