@@ -4,7 +4,7 @@ use pest::{
     error::{Error as PestError, ErrorVariant},
     Span,
 };
-use rpds::{HashTrieMap, List};
+use rpds::{HashTrieMap, List, Vector};
 
 use crate::{ast::*, parse::Rule};
 
@@ -38,12 +38,32 @@ impl<'a> fmt::Display for TranspileError<'a> {
     }
 }
 
+struct NootDef {
+    is_function: bool,
+    c_name: String,
+}
+
 #[derive(Clone)]
-struct TranspileState {}
+struct TranspileState {
+    noot_scopes: Vector<HashTrieMap<String, NootDef>>,
+}
 
 impl TranspileState {
     pub fn new() -> Self {
-        TranspileState {}
+        TranspileState {
+            noot_scopes: Vector::new(),
+        }
+    }
+    pub fn with_noot_def(&self, name: String, def: NootDef) -> Self {
+        TranspileState {
+            noot_scopes: self
+                .noot_scopes
+                .set(
+                    self.noot_scopes.len() - 1,
+                    self.noot_scopes.last().unwrap().insert(name, def),
+                )
+                .unwrap(),
+        }
     }
 }
 
@@ -62,6 +82,9 @@ impl<'a> Transpilation<'a> {
     }
     pub fn write(self) -> io::Result<()> {
         Ok(())
+    }
+    fn c_name_for(&self, noot_name: &str, function: bool) -> String {
+        todo!()
     }
 }
 
@@ -97,8 +120,18 @@ fn transpile_def<'a>(
     state: TranspileState,
     result: Transpilation<'a>,
 ) -> Transpilation<'a> {
+    let c_name = result.c_name_for(&def.ident.name, def.is_function());
+    let state = state.with_noot_def(
+        def.ident.name.clone(),
+        NootDef {
+            c_name: c_name.clone(),
+            is_function: def.is_function(),
+        },
+    );
     if def.is_function() {
+        // Function
     } else {
+        // Value
     }
     todo!()
 }
