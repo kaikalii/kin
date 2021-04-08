@@ -100,12 +100,8 @@ impl CFunction {
             ..self
         }
     }
-    pub fn pop_expr(self) -> (Self, String) {
-        let expr = self
-            .exprs
-            .peek()
-            .cloned()
-            .unwrap_or_else(|| "NOOT_NIL".into());
+    pub fn pop_expr(self) -> (Self, Option<String>) {
+        let expr = self.exprs.peek().cloned();
         (
             CFunction {
                 exprs: self.exprs.dequeue().unwrap_or_default(),
@@ -146,6 +142,8 @@ impl<'a> Transpilation<'a> {
         writeln!(source, "#include \"noot.h\"")?;
         writeln!(source, "#include \"tgc.h\"")?;
         writeln!(source)?;
+        writeln!(source, "static tgc_t noot_gc;")?;
+        writeln!(source)?;
 
         // Write function declarations
         for name in self.functions.keys().filter(|&name| name != "main") {
@@ -156,8 +154,13 @@ impl<'a> Transpilation<'a> {
         // Write function definitions
         for (name, function) in self.functions.into_iter() {
             let main = name == "main";
-            let ty = if main { "int" } else { "NootValue" };
-            writeln!(source, "{} {}(int count, NootValue* args) {{", ty, name)?;
+            // Write signature
+            if main {
+                writeln!(source, "int main(int argc, char** argv) {{")?;
+                writeln!(source, "    tgc_start(&noot_gc, &argc);")?;
+            } else {
+                writeln!(source, "NootValue {}(int count, NootValue* args) {{", name)?;
+            }
             for line in &function.lines {
                 write!(source, "    ")?;
                 if let Some(var_name) = &line.var_name {
@@ -165,9 +168,15 @@ impl<'a> Transpilation<'a> {
                 }
                 writeln!(source, "{};", line.value)?;
             }
+            // Clean up main
             if main {
+                if let (_, Some(expr)) = function.clone().pop_expr() {
+                    writeln!(source, "    {};", expr)?;
+                }
+                writeln!(source, "    tgc_stop(&noot_gc);")?;
                 writeln!(source, "    return 0;")?;
             }
+            // Close function
             writeln!(source, "}}\n")?;
         }
 
@@ -235,6 +244,15 @@ impl<'a> Transpilation<'a> {
             ..self
         }
     }
+    fn pop_expr(self) -> (Self, String) {
+        let mut expr = None;
+        let result = self.map_c_function(|cf| {
+            let (cf, ex) = cf.pop_expr();
+            expr = ex;
+            cf
+        });
+        (result, expr.unwrap_or_else(|| "NOOT_NIL".into()))
+    }
     fn error(self, error: TranspileError<'a>) -> Self {
         Transpilation {
             errors: self.errors.push_front(error),
@@ -252,16 +270,15 @@ impl<'a> Transpilation<'a> {
                     result
                 } else {
                     result.map_c_function(|cf| {
-                        let expr = cf
-                            .exprs
-                            .peek()
-                            .cloned()
-                            .unwrap_or_else(|| "NOOT_NIL".into());
-                        let cf = CFunction {
-                            exprs: cf.exprs.dequeue().unwrap_or_default(),
-                            ..cf
-                        };
-                        cf.with_line(None, expr)
+                        if let Some(expr) = cf.exprs.peek().cloned() {
+                            let cf = CFunction {
+                                exprs: cf.exprs.dequeue().unwrap_or_default(),
+                                ..cf
+                            };
+                            cf.with_line(None, expr)
+                        } else {
+                            cf
+                        }
                     })
                 };
                 (result, stack)
@@ -317,7 +334,11 @@ impl<'a> Transpilation<'a> {
             let result = self.items(def.items, stack.clone());
             let result = result.map_c_function(|cf| {
                 let (cf, line) = cf.pop_expr();
-                cf.with_line(Some(c_name.clone()), line)
+                if let Some(line) = line {
+                    cf.with_line(Some(c_name.clone()), line)
+                } else {
+                    cf
+                }
             });
             let stack = stack.with_noot_def(
                 def.ident.name,
@@ -333,8 +354,24 @@ impl<'a> Transpilation<'a> {
     fn node(self, node: Node<'a>, stack: TranspileStack) -> Self {
         match node {
             Node::Term(term) => self.term(term, stack),
+            Node::BinExpr(expr) => self.bin_expr(expr, stack),
             _ => todo!(),
         }
+    }
+    fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack) -> Self {
+        let f = match expr.op {
+            BinOp::Add => "noot_add",
+            BinOp::Sub => "noot_sub",
+            BinOp::Mul => "noot_mul",
+            BinOp::Div => "noot_div",
+            BinOp::Rem => "noot_rem",
+            _ => todo!(),
+        };
+        let result = self.node(*expr.left, stack.clone());
+        let (result, left) = result.pop_expr();
+        let result = result.node(*expr.right, stack);
+        let (result, right) = result.pop_expr();
+        result.map_c_function(|cf| cf.push_expr(format!("{}({}, {})", f, left, right)))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack) -> Self {
         match term {
@@ -345,7 +382,7 @@ impl<'a> Transpilation<'a> {
             Term::Int(i) => self.map_c_function(|cf| cf.push_expr(format!("new_int({})", i))),
             Term::Real(f) => self.map_c_function(|cf| cf.push_expr(format!("new_real({})", f))),
             Term::String(s) => {
-                self.map_c_function(|cf| cf.push_expr(format!("new_string({:?})", s)))
+                self.map_c_function(|cf| cf.push_expr(format!("new_string({:?}, {})", s, s.len())))
             }
             Term::Closure(_) => todo!(),
             Term::Expr(items) => self.items(items, stack),
