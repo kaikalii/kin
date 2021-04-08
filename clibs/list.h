@@ -29,11 +29,12 @@ NootList new_list_inner() {
 }
 
 NootList noot_list_push(NootList old, NootValue val) {
-    // Increase capacity if necessary
     NootListShared* shared = old.shared;
+    // Increase capacity if necessary
     if (old.len == shared->capacity) {
         size_t new_capacity = shared->capacity == 0 ? 1 : shared->capacity * 2;
         shared->buffer = (NootListEntry**)tgc_realloc(&noot_gc, shared->buffer, new_capacity * sizeof(NootListEntry*));
+        shared->capacity = new_capacity;
     }
     // Increment next id
     int new_id = ++shared->next_id;
@@ -60,4 +61,24 @@ NootValue noot_list_get(NootList list, int i) {
     NootListEntry* entry = buffer[i];
     while (entry->id > list.id) entry = entry->next;
     return entry->val;
+}
+
+NootValue noot_list_last(NootList list) {
+    return noot_list_get(list, list.len - 1);
+}
+
+NootList noot_list_pop(NootList old, NootValue* popped) {
+    // Set popped
+    *popped = noot_list_get(old, old.len - 1);
+    if (old.len == 0) return old;
+    NootListShared* shared = old.shared;
+    // Increment next id
+    int new_id = ++shared->next_id;
+    // Create new list
+    NootList list = {
+        .id = new_id,
+        .len = old.len - 1,
+        .shared = shared,
+    };
+    return list;
 }
