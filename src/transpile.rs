@@ -217,13 +217,16 @@ impl<'a> Transpilation<'a> {
         writeln!(source)?;
 
         // Write function declarations
-        for name in self.functions.keys().filter(|&name| name != "main") {
+        for (name, cf) in self.functions.iter().filter(|&(name, _)| name != "main") {
             writeln!(source, "NootValue {}(int count, NootValue* args);", name)?;
+            if !cf.captures.is_empty() {
+                writeln!(source, "static NootValue* {}_captures;", name)?;
+            }
         }
         writeln!(source)?;
 
         // Write function definitions
-        for (name, function) in &self.functions {
+        for (name, cf) in &self.functions {
             let main = name == "main";
             // Write signature
             if main {
@@ -233,7 +236,7 @@ impl<'a> Transpilation<'a> {
                 writeln!(source, "NootValue {}(int count, NootValue* args) {{", name)?;
             }
             // Write lines
-            for line in &function.lines {
+            for line in &cf.lines {
                 write!(source, "{:indent$}", "", indent = (line.indent + 1) * 4)?;
                 if let Some(var_name) = &line.var_name {
                     write!(source, "NootValue {} = ", var_name)?;
@@ -247,7 +250,7 @@ impl<'a> Transpilation<'a> {
             }
             // Clean up main
             if main {
-                if let (_, Some(expr)) = function.clone().pop_expr() {
+                if let (_, Some(expr)) = cf.clone().pop_expr() {
                     writeln!(source, "    {};", expr)?;
                 }
                 writeln!(source, "    tgc_stop(&noot_gc);")?;
@@ -302,6 +305,11 @@ impl<'a> Transpilation<'a> {
             function_stack: result.function_stack.drop_last().unwrap(),
             ..result
         }
+    }
+    fn curr_c_function(&self) -> &CFunction {
+        self.functions
+            .get(self.function_stack.last().unwrap())
+            .unwrap()
     }
     fn map_c_function_at<F>(self, i: usize, f: F) -> Self
     where
@@ -548,7 +556,7 @@ impl<'a> Transpilation<'a> {
         items: Items<'a>,
         stack: TranspileStack,
     ) -> Self {
-        let result = self.start_c_function(c_name);
+        let result = self.start_c_function(c_name.clone());
         let stack = params
             .into_iter()
             .enumerate()
@@ -562,6 +570,27 @@ impl<'a> Transpilation<'a> {
                 )
             });
         let result = result.items(items, stack);
-        result.finish_c_function()
+        let captures = result.curr_c_function().captures.clone();
+        if captures.is_empty() {
+            result.finish_c_function()
+        } else {
+            let result = result.finish_c_function();
+            let captures_name = format!("{}_captures", c_name);
+            let result = result.map_c_function(|cf| {
+                cf.with_raw_line(format!(
+                    "{} = (NootValue*)tgc_alloc(&noot_gc, {} * sizeof(NootValue));",
+                    captures_name,
+                    captures.len()
+                ))
+            });
+            captures
+                .iter()
+                .enumerate()
+                .fold(result, |result, (i, cap)| {
+                    result.map_c_function(|cf| {
+                        cf.with_raw_line(format!("{}[{}] = {};", captures_name, i, cap))
+                    })
+                })
+        }
     }
 }
