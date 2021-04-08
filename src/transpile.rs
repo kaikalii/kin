@@ -392,6 +392,7 @@ impl<'a> Transpilation<'a> {
         match node {
             Node::Term(term) => self.term(term, stack),
             Node::BinExpr(expr) => self.bin_expr(expr, stack),
+            Node::UnExpr(expr) => self.un_expr(expr, stack),
             _ => todo!(),
         }
     }
@@ -431,6 +432,15 @@ impl<'a> Transpilation<'a> {
             BinOp::Rem => "noot_rem",
         };
         result.map_c_function(|cf| cf.push_expr(format!("{}({}, {})", f, left, right)))
+    }
+    fn un_expr(self, expr: UnExpr<'a>, stack: TranspileStack) -> Self {
+        let result = self.node(*expr.inner, stack);
+        let (result, inner) = result.pop_expr();
+        let f = match expr.op {
+            UnOp::Neg => "noot_neg",
+            UnOp::Not => "noot_not",
+        };
+        result.map_c_function(|cf| cf.push_expr(format!("{}({})", f, inner)))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack) -> Self {
         match term {

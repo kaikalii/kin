@@ -31,7 +31,7 @@ op_mdr = { "*" | "/" | "%" }
 op_comp = { "isnt" | "is" | "<=" | ">=" | "<" | ">" }
 op_and = { "and" }
 op_or = { "or" }
-op_un = { "not" }
+op_un = { "not" | "-" }
 
 // Expressions
 paren_expr = { "(" ~ NEWLINE? ~ items ~ NEWLINE? ~ ")" }
