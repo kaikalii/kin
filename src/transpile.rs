@@ -10,7 +10,7 @@ use pest::{
     error::{Error as PestError, ErrorVariant},
     Span,
 };
-use rpds::{HashTrieMap, List, Queue, Stack, Vector};
+use rpds::{HashTrieMap, List, Queue, Vector};
 
 use crate::{ast::*, parse::Rule};
 
@@ -99,7 +99,7 @@ impl TranspileStack {
 #[derive(Clone)]
 pub struct Transpilation<'a> {
     functions: HashTrieMap<String, CFunction>,
-    function_stack: Stack<String>,
+    function_stack: Vector<String>,
     pub errors: List<TranspileError<'a>>,
 }
 
@@ -107,6 +107,7 @@ pub struct Transpilation<'a> {
 struct CFunction {
     exprs: Queue<String>,
     lines: Vector<CLine>,
+    captures: Vector<String>,
     indent: usize,
 }
 
@@ -155,6 +156,20 @@ impl CFunction {
             },
             expr,
         )
+    }
+    pub fn with_capture(self, capture: String) -> (Self, usize) {
+        if let Some(i) = self.captures.iter().position(|cap| cap == &capture) {
+            (self, i)
+        } else {
+            let i = self.captures.len();
+            (
+                CFunction {
+                    captures: self.captures.push_back(capture),
+                    ..self
+                },
+                i,
+            )
+        }
     }
     pub fn indent(self) -> Self {
         CFunction {
@@ -266,7 +281,7 @@ impl<'a> Transpilation<'a> {
     fn start_c_function(self, c_name: String) -> Self {
         Transpilation {
             functions: self.functions.insert(c_name.clone(), CFunction::default()),
-            function_stack: self.function_stack.push(c_name),
+            function_stack: self.function_stack.push_back(c_name),
             ..self
         }
     }
@@ -284,27 +299,27 @@ impl<'a> Transpilation<'a> {
             cf.with_line(None, format!("return {}", ret_expr))
         });
         Transpilation {
-            function_stack: result.function_stack.pop().unwrap(),
+            function_stack: result.function_stack.drop_last().unwrap(),
             ..result
         }
     }
-    fn curr_c_function_name(&self) -> &str {
-        self.function_stack.peek().unwrap()
-    }
-    fn curr_c_function(&self) -> &CFunction {
-        self.functions.get(self.curr_c_function_name()).unwrap()
+    fn map_c_function_at<F>(self, i: usize, f: F) -> Self
+    where
+        F: FnOnce(CFunction) -> CFunction,
+    {
+        let function_name = self.function_stack.get(i).unwrap();
+        let cf = self.functions.get(function_name).unwrap();
+        Transpilation {
+            functions: self.functions.insert(function_name.clone(), f(cf.clone())),
+            ..self
+        }
     }
     fn map_c_function<F>(self, f: F) -> Self
     where
         F: FnOnce(CFunction) -> CFunction,
     {
-        Transpilation {
-            functions: self.functions.insert(
-                self.curr_c_function_name().into(),
-                f(self.curr_c_function().clone()),
-            ),
-            ..self
-        }
+        let last_index = self.function_stack.len() - 1;
+        self.map_c_function_at(last_index, f)
     }
     fn pop_expr(self) -> (Self, String) {
         let mut expr = None;
@@ -500,13 +515,26 @@ impl<'a> Transpilation<'a> {
                     .rev()
                     .find_map(|scope| scope.get(&ident.name))
                 {
-                    self.map_c_function(|cf| {
-                        cf.push_expr(if def.is_function {
-                            format!("new_function(&{})", def.c_name)
-                        } else {
-                            def.c_name.clone()
+                    if let Some(_ident_i) = self.function_stack.iter().position(|c_name| {
+                        let cf = self.functions.get(c_name).unwrap();
+                        cf.lines.iter().any(|line| {
+                            line.var_name.as_ref().map_or(false, |vn| vn == &def.c_name)
                         })
-                    })
+                    }) {
+                        let function_name = self.function_stack.last().unwrap().clone();
+                        self.map_c_function(|cf| {
+                            let (cf, i) = cf.with_capture(def.c_name.clone());
+                            cf.push_expr(format!("{}_captures[{}]", function_name, i))
+                        })
+                    } else {
+                        self.map_c_function(|cf| {
+                            cf.push_expr(if def.is_function {
+                                format!("new_function(&{})", def.c_name)
+                            } else {
+                                def.c_name.clone()
+                            })
+                        })
+                    }
                 } else {
                     self.error(UnknownDef(ident.name.clone()).span(ident.span))
                 }
