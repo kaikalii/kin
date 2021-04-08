@@ -67,7 +67,7 @@ fn format_params(f: &mut fmt::Formatter, params: &[Param]) -> fmt::Result {
     Ok(())
 }
 
-type Params<'a> = Vec<Param<'a>>;
+pub type Params<'a> = Vec<Param<'a>>;
 
 #[derive(Debug, Clone)]
 pub struct Def<'a> {

@@ -369,27 +369,7 @@ impl<'a> Transpilation<'a> {
                     is_function: true,
                 },
             );
-            let result = self.start_c_function(c_name);
-            let stack = def
-                .params
-                .into_iter()
-                .enumerate()
-                .fold(stack, |stack, (i, param)| {
-                    stack.with_noot_def(
-                        param.ident.name,
-                        NootDef {
-                            c_name: format!("args[{}]", i),
-                            is_function: false,
-                        },
-                    )
-                });
-            let result = result.items(def.items, stack.clone());
-            let result = result.finish_c_function();
-            // Use this for closures
-            // let result = result.map_c_function(|cf| {
-            //     let (cf, line) = cf.pop_expr();
-            //     cf.with_line(Some(c_name), line)
-            // });
+            let result = self.function(c_name, def.params, def.items, stack.clone());
             (result, stack)
         } else {
             // Value
@@ -507,8 +487,12 @@ impl<'a> Transpilation<'a> {
             Term::String(s) => {
                 self.map_c_function(|cf| cf.push_expr(format!("new_string({:?}, {})", s, s.len())))
             }
-            Term::Closure(_) => todo!(),
             Term::Expr(items) => self.items(items, stack),
+            Term::Closure(closure) => {
+                let c_name = self.c_name_for("closure", true);
+                let result = self.function(c_name.clone(), closure.params, closure.body, stack);
+                result.map_c_function(|cf| cf.push_expr(format!("new_function(&{})", c_name)))
+            }
             Term::Ident(ident) => {
                 if let Some(def) = stack
                     .noot_scopes
@@ -528,5 +512,28 @@ impl<'a> Transpilation<'a> {
                 }
             }
         }
+    }
+    fn function(
+        self,
+        c_name: String,
+        params: Params<'a>,
+        items: Items<'a>,
+        stack: TranspileStack,
+    ) -> Self {
+        let result = self.start_c_function(c_name);
+        let stack = params
+            .into_iter()
+            .enumerate()
+            .fold(stack, |stack, (i, param)| {
+                stack.with_noot_def(
+                    param.ident.name,
+                    NootDef {
+                        c_name: format!("args[{}]", i),
+                        is_function: false,
+                    },
+                )
+            });
+        let result = result.items(items, stack);
+        result.finish_c_function()
     }
 }
