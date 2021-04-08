@@ -5,6 +5,7 @@ use std::{
     iter::once,
 };
 
+use itertools::*;
 use pest::{
     error::{Error as PestError, ErrorVariant},
     Span,
@@ -50,6 +51,14 @@ struct NootDef {
     c_name: String,
 }
 
+macro_rules! builtins {
+    ($($name:literal),*) => {
+        &[$(($name, concat!("noot_", $name))),*]
+    }
+}
+
+const BUILTINS: &[(&str, &str)] = builtins!("print", "println");
+
 #[derive(Clone)]
 struct TranspileStack {
     noot_scopes: Vector<HashTrieMap<String, NootDef>>,
@@ -58,7 +67,20 @@ struct TranspileStack {
 impl TranspileStack {
     pub fn new() -> Self {
         TranspileStack {
-            noot_scopes: Vector::new().push_back(Default::default()),
+            noot_scopes: Vector::new().push_back(
+                BUILTINS
+                    .iter()
+                    .map(|&(noot_name, c_name)| {
+                        (
+                            noot_name.into(),
+                            NootDef {
+                                c_name: c_name.into(),
+                                is_function: true,
+                            },
+                        )
+                    })
+                    .collect(),
+            ),
         }
     }
     pub fn with_noot_def(self, name: String, def: NootDef) -> Self {
@@ -155,7 +177,10 @@ pub fn transpile(items: Items) -> Transpilation {
 impl<'a> Transpilation<'a> {
     pub fn new() -> Self {
         Transpilation {
-            functions: once(("main".into(), CFunction::default())).collect(),
+            functions: once("main")
+                // .chain(BUILTINS.iter().map(|bi| bi.0))
+                .map(|name| (name.into(), CFunction::default()))
+                .collect(),
             function_stack: once("main".into()).collect(),
             errors: Default::default(),
         }
@@ -183,7 +208,7 @@ impl<'a> Transpilation<'a> {
         writeln!(source)?;
 
         // Write function definitions
-        for (name, function) in self.functions.into_iter() {
+        for (name, function) in &self.functions {
             let main = name == "main";
             // Write signature
             if main {
@@ -393,19 +418,18 @@ impl<'a> Transpilation<'a> {
             Node::Term(term) => self.term(term, stack),
             Node::BinExpr(expr) => self.bin_expr(expr, stack),
             Node::UnExpr(expr) => self.un_expr(expr, stack),
+            Node::Call(expr) => self.call_expr(expr, stack),
             _ => todo!(),
         }
     }
     fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack) -> Self {
         let result = self.node(*expr.left, stack.clone());
         let (result, left) = result.pop_expr();
-        let result = result.node(*expr.right, stack);
-        let (result, right) = result.pop_expr();
         let f = match expr.op {
             BinOp::Or | BinOp::And => {
                 let or = expr.op == BinOp::Or;
                 let temp_name = result.c_name_for("temp", false);
-                return result.map_c_function(|cf| {
+                let result = result.map_c_function(|cf| {
                     cf.with_line(Some(temp_name.clone()), left)
                         .with_raw_line(format!(
                             "if ({}noot_is_true({})) {{",
@@ -413,7 +437,11 @@ impl<'a> Transpilation<'a> {
                             temp_name
                         ))
                         .indent()
-                        .with_line(Some(temp_name.clone()), right)
+                });
+                let result = result.node(*expr.right, stack);
+                let (result, right) = result.pop_expr();
+                return result.map_c_function(|cf| {
+                    cf.with_line(Some(temp_name.clone()), right)
                         .deindent()
                         .with_raw_line("}".into())
                         .push_expr(temp_name)
@@ -431,6 +459,8 @@ impl<'a> Transpilation<'a> {
             BinOp::Div => "noot_div",
             BinOp::Rem => "noot_rem",
         };
+        let result = result.node(*expr.right, stack);
+        let (result, right) = result.pop_expr();
         result.map_c_function(|cf| cf.push_expr(format!("{}({}, {})", f, left, right)))
     }
     fn un_expr(self, expr: UnExpr<'a>, stack: TranspileStack) -> Self {
@@ -441,6 +471,30 @@ impl<'a> Transpilation<'a> {
             UnOp::Not => "noot_not",
         };
         result.map_c_function(|cf| cf.push_expr(format!("{}({})", f, inner)))
+    }
+    fn call_expr(self, call: CallExpr<'a>, stack: TranspileStack) -> Self {
+        let result = self.node(*call.expr, stack.clone());
+        let (result, f) = result.pop_expr();
+        let (result, params) =
+            call.args
+                .into_iter()
+                .fold((result, Vector::new()), |(result, params), node| {
+                    let result = result.node(node, stack.clone());
+                    let (result, param) = result.pop_expr();
+                    (result, params.push_back(param))
+                });
+        let param_count = params.len();
+        let params: String = params
+            .into_iter()
+            .cloned()
+            .intersperse(", ".into())
+            .collect();
+        result.map_c_function(|cf| {
+            cf.push_expr(format!(
+                "noot_call({}, {}, (NootValue[]) {{ {} }})",
+                f, param_count, params
+            ))
+        })
     }
     fn term(self, term: Term<'a>, stack: TranspileStack) -> Self {
         match term {

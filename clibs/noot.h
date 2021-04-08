@@ -112,6 +112,13 @@ NootValue noot_print(int count, NootValue* args) {
             break;
         }
     }
+    return NOOT_NIL;
+}
+
+NootValue noot_println(int count, NootValue* args) {
+    NootValue res = noot_print(count, args);
+    printf("\n");
+    return res;
 }
 
 NootValue noot_add(NootValue a, NootValue b) {
