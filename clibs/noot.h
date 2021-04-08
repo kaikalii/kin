@@ -6,6 +6,8 @@
 #include "utf8.h"
 #include "tgc.h"
 
+static tgc_t noot_gc;
+
 typedef unsigned char byte;
 
 typedef struct NootString {

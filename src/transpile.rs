@@ -223,8 +223,6 @@ impl<'a> Transpilation<'a> {
         writeln!(source, "#include \"noot.h\"")?;
         writeln!(source, "#include \"tgc.h\"")?;
         writeln!(source)?;
-        writeln!(source, "static tgc_t noot_gc;")?;
-        writeln!(source)?;
 
         // Write function declarations
         for (name, cf) in self.functions.iter().filter(|&(name, _)| name != "main") {
@@ -548,10 +546,6 @@ impl<'a> Transpilation<'a> {
                                 let function_name =
                                     result.function_stack.get(stack_i).unwrap().clone();
                                 let capturer_name = result.function_stack.get(stack_i + 1).cloned();
-                                dbg!(stack_i);
-                                dbg!(&function_name);
-                                dbg!(&capturer_name);
-                                dbg!(&prev);
                                 let result = if last {
                                     result.map_c_function(|cf| {
                                         let cap_i = cf.capture_index_of(&def.c_name);
@@ -575,7 +569,6 @@ impl<'a> Transpilation<'a> {
                                         cf
                                     })
                                 };
-                                println!();
                                 (result, prev)
                             },
                         );
