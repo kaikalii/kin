@@ -98,6 +98,7 @@ NootValue noot_print(int count, NootValue* args) {
         NootValue val = args[i];
         switch (val.type) {
         case Nil:
+            printf("nil");
             break;
         case Bool:
             if (val.data.Bool) printf("true");
