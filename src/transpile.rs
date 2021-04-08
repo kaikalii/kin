@@ -85,12 +85,36 @@ pub struct Transpilation<'a> {
 struct CFunction {
     exprs: Queue<String>,
     lines: Vector<CLine>,
+    indent: usize,
+}
+
+struct CLine {
+    var_name: Option<String>,
+    value: String,
+    indent: usize,
+    semicolon: bool,
 }
 
 impl CFunction {
     pub fn with_line(self, var_name: Option<String>, value: String) -> Self {
         CFunction {
-            lines: self.lines.push_back(CLine { var_name, value }),
+            lines: self.lines.push_back(CLine {
+                var_name,
+                value,
+                indent: self.indent,
+                semicolon: true,
+            }),
+            ..self
+        }
+    }
+    pub fn with_raw_line(self, value: String) -> Self {
+        CFunction {
+            lines: self.lines.push_back(CLine {
+                var_name: None,
+                value,
+                indent: self.indent,
+                semicolon: false,
+            }),
             ..self
         }
     }
@@ -110,11 +134,18 @@ impl CFunction {
             expr,
         )
     }
-}
-
-struct CLine {
-    var_name: Option<String>,
-    value: String,
+    pub fn indent(self) -> Self {
+        CFunction {
+            indent: self.indent + 1,
+            ..self
+        }
+    }
+    pub fn deindent(self) -> Self {
+        CFunction {
+            indent: self.indent - 1,
+            ..self
+        }
+    }
 }
 
 pub fn transpile(items: Items) -> Transpilation {
@@ -161,12 +192,18 @@ impl<'a> Transpilation<'a> {
             } else {
                 writeln!(source, "NootValue {}(int count, NootValue* args) {{", name)?;
             }
+            // Write lines
             for line in &function.lines {
-                write!(source, "    ")?;
+                write!(source, "{:indent$}", "", indent = (line.indent + 1) * 4)?;
                 if let Some(var_name) = &line.var_name {
                     write!(source, "NootValue {} = ", var_name)?;
                 }
-                writeln!(source, "{};", line.value)?;
+                writeln!(
+                    source,
+                    "{}{}",
+                    line.value,
+                    if line.semicolon { ";" } else { "" }
+                )?;
             }
             // Clean up main
             if main {
@@ -194,7 +231,7 @@ impl<'a> Transpilation<'a> {
     }
     fn c_name_for(&self, noot_name: &str, function: bool) -> String {
         let mut c_name = noot_name.to_owned();
-        let mut i = 0;
+        let mut i = 1;
         while self.c_name_exists(&c_name, function) {
             i += 1;
             c_name = format!("{}_{}", noot_name, i);
@@ -359,18 +396,40 @@ impl<'a> Transpilation<'a> {
         }
     }
     fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack) -> Self {
+        let result = self.node(*expr.left, stack.clone());
+        let (result, left) = result.pop_expr();
+        let result = result.node(*expr.right, stack);
+        let (result, right) = result.pop_expr();
         let f = match expr.op {
+            BinOp::Or | BinOp::And => {
+                let or = expr.op == BinOp::Or;
+                let temp_name = result.c_name_for("temp", false);
+                return result.map_c_function(|cf| {
+                    cf.with_line(Some(temp_name.clone()), left)
+                        .with_raw_line(format!(
+                            "if ({}noot_is_true({})) {{",
+                            if or { "!" } else { "" },
+                            temp_name
+                        ))
+                        .indent()
+                        .with_line(Some(temp_name.clone()), right)
+                        .deindent()
+                        .with_raw_line("}".into())
+                        .push_expr(temp_name)
+                });
+            }
+            BinOp::Is => "noot_eq",
+            BinOp::Isnt => "noot_neq",
+            BinOp::Less => "noot_lt",
+            BinOp::LessOrEqual => "noot_le",
+            BinOp::Greater => "noot_gt",
+            BinOp::GreaterOrEqual => "noot_ge",
             BinOp::Add => "noot_add",
             BinOp::Sub => "noot_sub",
             BinOp::Mul => "noot_mul",
             BinOp::Div => "noot_div",
             BinOp::Rem => "noot_rem",
-            _ => todo!(),
         };
-        let result = self.node(*expr.left, stack.clone());
-        let (result, left) = result.pop_expr();
-        let result = result.node(*expr.right, stack);
-        let (result, right) = result.pop_expr();
         result.map_c_function(|cf| cf.push_expr(format!("{}({}, {})", f, left, right)))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack) -> Self {
