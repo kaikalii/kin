@@ -107,7 +107,7 @@ pub struct Transpilation<'a> {
 struct CFunction {
     exprs: Queue<String>,
     lines: Vector<CLine>,
-    captures: Vector<String>,
+    captures: Vector<CCapture>,
     indent: usize,
 }
 
@@ -116,6 +116,11 @@ struct CLine {
     value: String,
     indent: usize,
     semicolon: bool,
+}
+
+struct CCapture {
+    pub c_name: String,
+    pub capture_name: String,
 }
 
 impl CFunction {
@@ -157,18 +162,23 @@ impl CFunction {
             expr,
         )
     }
-    pub fn with_capture(self, capture: String) -> (Self, usize) {
-        if let Some(i) = self.captures.iter().position(|cap| cap == &capture) {
-            (self, i)
+    pub fn capture_index_of(&self, c_name: &str) -> usize {
+        self.captures
+            .iter()
+            .position(|cap| cap.c_name == c_name)
+            .unwrap()
+    }
+    pub fn with_capture(self, c_name: String, capture_name: String) -> Self {
+        if self.captures.iter().any(|cap| cap.c_name == c_name) {
+            self
         } else {
-            let i = self.captures.len();
-            (
-                CFunction {
-                    captures: self.captures.push_back(capture),
-                    ..self
-                },
-                i,
-            )
+            CFunction {
+                captures: self.captures.push_back(CCapture {
+                    c_name,
+                    capture_name,
+                }),
+                ..self
+            }
         }
     }
     pub fn indent(self) -> Self {
@@ -523,18 +533,55 @@ impl<'a> Transpilation<'a> {
                     .rev()
                     .find_map(|scope| scope.get(&ident.name))
                 {
-                    if let Some(_ident_i) = self.function_stack.iter().position(|c_name| {
+                    if let Some(ident_i) = self.function_stack.iter().position(|c_name| {
                         let cf = self.functions.get(c_name).unwrap();
                         cf.lines.iter().any(|line| {
                             line.var_name.as_ref().map_or(false, |vn| vn == &def.c_name)
                         })
                     }) {
-                        let function_name = self.function_stack.last().unwrap().clone();
-                        self.map_c_function(|cf| {
-                            let (cf, i) = cf.with_capture(def.c_name.clone());
-                            cf.push_expr(format!("{}_captures[{}]", function_name, i))
-                        })
+                        // Captures
+                        let curr_stack_i = self.function_stack.len() - 1;
+                        let (result, _) = (ident_i..self.function_stack.len()).fold(
+                            (self, None),
+                            |(result, mut prev), stack_i| {
+                                let last = curr_stack_i == stack_i;
+                                let function_name =
+                                    result.function_stack.get(stack_i).unwrap().clone();
+                                let capturer_name = result.function_stack.get(stack_i + 1).cloned();
+                                dbg!(stack_i);
+                                dbg!(&function_name);
+                                dbg!(&capturer_name);
+                                dbg!(&prev);
+                                let result = if last {
+                                    result.map_c_function(|cf| {
+                                        let cap_i = cf.capture_index_of(&def.c_name);
+                                        cf.push_expr(format!(
+                                            "{}_captures[{}]",
+                                            function_name, cap_i
+                                        ))
+                                    })
+                                } else {
+                                    result.map_c_function_at(stack_i + 1, |cf| {
+                                        let cf = cf.with_capture(
+                                            def.c_name.clone(),
+                                            prev.clone().unwrap_or_else(|| def.c_name.clone()),
+                                        );
+                                        let cap_i = cf.capture_index_of(&def.c_name);
+                                        prev = Some(format!(
+                                            "{}_captures[{}]",
+                                            capturer_name.unwrap(),
+                                            cap_i
+                                        ));
+                                        cf
+                                    })
+                                };
+                                println!();
+                                (result, prev)
+                            },
+                        );
+                        result
                     } else {
+                        // Non-captures
                         self.map_c_function(|cf| {
                             cf.push_expr(if def.is_function {
                                 format!("new_function(&{})", def.c_name)
@@ -569,12 +616,14 @@ impl<'a> Transpilation<'a> {
                     },
                 )
             });
+        // Transpile body items and finish function
         let result = result.items(items, stack);
         let captures = result.curr_c_function().captures.clone();
+        let result = result.finish_c_function();
+        // Set captures in parent scope
         if captures.is_empty() {
-            result.finish_c_function()
+            result
         } else {
-            let result = result.finish_c_function();
             let captures_name = format!("{}_captures", c_name);
             let result = result.map_c_function(|cf| {
                 cf.with_raw_line(format!(
@@ -588,7 +637,10 @@ impl<'a> Transpilation<'a> {
                 .enumerate()
                 .fold(result, |result, (i, cap)| {
                     result.map_c_function(|cf| {
-                        cf.with_raw_line(format!("{}[{}] = {};", captures_name, i, cap))
+                        cf.with_raw_line(format!(
+                            "{}[{}] = {};",
+                            captures_name, i, cap.capture_name
+                        ))
                     })
                 })
         }
