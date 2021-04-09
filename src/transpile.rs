@@ -156,6 +156,7 @@ struct CFunction {
     lines: Vector<CLine>,
     captures: Vector<CCapture>,
     indent: usize,
+    max_arg: usize,
 }
 
 struct CLine {
@@ -292,6 +293,13 @@ impl<'a> Transpilation<'a> {
                     "NootValue {}(uint8_t count, NootValue* args) {{",
                     name
                 )?;
+                for i in 0..cf.max_arg {
+                    writeln!(
+                        source,
+                        "    NootValue arg{i} = {i} < count ? args[{i}] : NOOT_NIL;",
+                        i = i
+                    )?;
+                }
             }
             // Write lines
             for line in &cf.lines {
@@ -681,6 +689,10 @@ impl<'a> Transpilation<'a> {
         stack: TranspileStack,
     ) -> Self {
         let result = self.start_c_function(c_name.clone());
+        let result = result.map_c_function(|cf| CFunction {
+            max_arg: params.len(),
+            ..cf
+        });
         let stack = params
             .into_iter()
             .enumerate()
@@ -688,7 +700,7 @@ impl<'a> Transpilation<'a> {
                 stack.with_noot_def(
                     param.ident.name,
                     NootDef {
-                        c_name: format!("{} < count ? args[{}] : NOOT_NIL", i, i),
+                        c_name: format!("arg{}", i),
                         is_function: false,
                     },
                 )

@@ -1,4 +1,3 @@
-- Check for more reserved names
 - Make argument guards optional
 - Implement tables
 - Add iteration
