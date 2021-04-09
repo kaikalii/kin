@@ -257,24 +257,45 @@ fn parse_expr_call(pair: Pair<Rule>) -> ParseResult<Node> {
 fn parse_expr_insert(pair: Pair<Rule>) -> ParseResult<Node> {
     debug_pair!(pair);
     let mut pairs = pair.into_inner();
-    let term = parse_term(pairs.next().unwrap())?;
+    let inner = parse_expr_get(pairs.next().unwrap())?;
     let mut insertions = Vec::new();
     for pair in pairs {
         match pair.as_rule() {
             Rule::insertion => {
                 let mut pairs = pair.into_inner();
-                let key = parse_term(pairs.next().unwrap())?;
-                let val = pairs.next().map(parse_term).transpose()?;
+                let key = parse_expr_get(pairs.next().unwrap())?;
+                let val = pairs.next().map(parse_expr_get).transpose()?;
                 insertions.push(Insertion { key, val });
             }
             rule => unreachable!("{:?}", rule),
         }
     }
     Ok(if insertions.is_empty() {
-        Node::Term(term)
+        inner
     } else {
-        Node::Insert(InsertExpr { term, insertions })
+        Node::Insert(InsertExpr {
+            inner: inner.into(),
+            insertions,
+        })
     })
+}
+
+fn parse_expr_get(pair: Pair<Rule>) -> ParseResult<Node> {
+    debug_pair!(pair);
+    let mut pairs = pair.into_inner();
+    let mut node = Node::Term(parse_term(pairs.next().unwrap())?);
+    for pair in pairs {
+        let get = match pair.as_rule() {
+            Rule::ident => Get::Field(parse_ident(pair)),
+            Rule::term => Get::Index(parse_term(pair)?),
+            rule => unreachable!("{:?}", rule),
+        };
+        node = Node::Get(GetExpr {
+            inner: node.into(),
+            get,
+        })
+    }
+    Ok(node)
 }
 
 fn parse_term(pair: Pair<Rule>) -> ParseResult<Term> {

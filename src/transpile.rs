@@ -436,6 +436,7 @@ impl<'a> Transpilation<'a> {
             Node::UnExpr(expr) => self.un_expr(expr, stack),
             Node::Call(expr) => self.call_expr(expr, stack),
             Node::Insert(expr) => self.insert_expr(expr, stack),
+            Node::Get(expr) => self.get_expr(expr, stack),
         }
     }
     fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack) -> Self {
@@ -513,14 +514,14 @@ impl<'a> Transpilation<'a> {
         })
     }
     fn insert_expr(self, expr: InsertExpr<'a>, stack: TranspileStack) -> Self {
-        let (result, term) = self.term(expr.term, stack.clone()).pop_expr();
+        let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
         let (result, expr) =
             expr.insertions
                 .into_iter()
-                .fold((result, term), |(result, inner), ins| {
-                    let (result, key) = result.term(ins.key, stack.clone()).pop_expr();
+                .fold((result, inner), |(result, inner), ins| {
+                    let (result, key) = result.node(ins.key, stack.clone()).pop_expr();
                     let (result, val) = if let Some(val) = ins.val {
-                        let (result, val) = result.term(val, stack.clone()).pop_expr();
+                        let (result, val) = result.node(val, stack.clone()).pop_expr();
                         (result, format!("&{}", val))
                     } else {
                         (result, "NULL".into())
@@ -528,6 +529,17 @@ impl<'a> Transpilation<'a> {
                     (result, format!("noot_insert({}, {}, {})", inner, key, val))
                 });
         result.map_c_function(|cf| cf.push_expr(expr))
+    }
+    fn get_expr(self, expr: GetExpr<'a>, stack: TranspileStack) -> Self {
+        let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
+        let (result, index) = match expr.get {
+            Get::Index(term) => result.term(term, stack).pop_expr(),
+            Get::Field(ident) => (
+                result,
+                format!("new_string({:?}, {})", ident.name, ident.name.len()),
+            ),
+        };
+        result.map_c_function(|cf| cf.push_expr(format!("noot_get({}, {})", inner, index)))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack) -> Self {
         match term {

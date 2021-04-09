@@ -109,6 +109,7 @@ pub enum Node<'a> {
     UnExpr(UnExpr<'a>),
     Call(CallExpr<'a>),
     Insert(InsertExpr<'a>),
+    Get(GetExpr<'a>),
 }
 
 impl<'a> fmt::Display for Node<'a> {
@@ -119,6 +120,7 @@ impl<'a> fmt::Display for Node<'a> {
             Node::UnExpr(expr) => expr.fmt(f),
             Node::Call(expr) => expr.fmt(f),
             Node::Insert(expr) => expr.fmt(f),
+            Node::Get(expr) => expr.fmt(f),
         }
     }
 }
@@ -269,19 +271,19 @@ impl<'a> fmt::Display for CallExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Insertion<'a> {
-    pub key: Term<'a>,
-    pub val: Option<Term<'a>>,
+    pub key: Node<'a>,
+    pub val: Option<Node<'a>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct InsertExpr<'a> {
-    pub term: Term<'a>,
+    pub inner: Box<Node<'a>>,
     pub insertions: Vec<Insertion<'a>>,
 }
 
 impl<'a> fmt::Display for InsertExpr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.term)?;
+        write!(f, "{}", self.inner)?;
         match self.insertions.len() {
             0 => {}
             1 => {
@@ -301,6 +303,29 @@ impl<'a> fmt::Display for InsertExpr<'a> {
                 }
                 write!(f, "end")?;
             }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Get<'a> {
+    Index(Term<'a>),
+    Field(Ident<'a>),
+}
+
+#[derive(Debug, Clone)]
+pub struct GetExpr<'a> {
+    pub inner: Box<Node<'a>>,
+    pub get: Get<'a>,
+}
+
+impl<'a> fmt::Display for GetExpr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.inner)?;
+        match &self.get {
+            Get::Index(term) => write!(f, "'{}", term)?,
+            Get::Field(ident) => write!(f, ".{}", ident.name)?,
         }
         Ok(())
     }
