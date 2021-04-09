@@ -10,7 +10,7 @@ use pest::{
     error::{Error as PestError, ErrorVariant},
     Span,
 };
-use rpds::{HashTrieMap, List, Queue, Vector};
+use rpds::{List, Queue, RedBlackTreeMap, Vector};
 
 use crate::{ast::*, parse::Rule};
 
@@ -60,9 +60,46 @@ macro_rules! builtin_functions {
 const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!("print", "println", "len");
 const BUILTIN_VALUES: &[(&str, &str)] = &[("list", "NOOT_EMPTY_LIST")];
 
+static RESERVED_NAMES: &[&str] = &[
+    "auto",
+    "break",
+    "case",
+    "char",
+    "const",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline ",
+    "int",
+    "long",
+    "register",
+    "restrict ",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "struct",
+    "switch",
+    "typedef",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+];
+
 #[derive(Clone)]
 struct TranspileStack {
-    noot_scopes: Vector<HashTrieMap<String, NootDef>>,
+    noot_scopes: Vector<RedBlackTreeMap<String, NootDef>>,
 }
 
 impl TranspileStack {
@@ -108,7 +145,7 @@ impl TranspileStack {
 
 #[derive(Clone)]
 pub struct Transpilation<'a> {
-    functions: HashTrieMap<String, CFunction>,
+    functions: RedBlackTreeMap<String, CFunction>,
     function_stack: Vector<String>,
     pub errors: List<TranspileError<'a>>,
 }
@@ -284,7 +321,8 @@ impl<'a> Transpilation<'a> {
         Ok(())
     }
     fn c_name_exists(&self, c_name: &str, function: bool) -> bool {
-        function && self.functions.keys().any(|name| name == c_name)
+        RESERVED_NAMES.contains(&c_name)
+            || function && self.functions.keys().any(|name| name == c_name)
             || !function
                 && self
                     .functions
