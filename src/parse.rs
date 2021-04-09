@@ -259,25 +259,13 @@ fn parse_expr_insert(pair: Pair<Rule>) -> ParseResult<Node> {
     let mut pairs = pair.into_inner();
     let term = parse_term(pairs.next().unwrap())?;
     let mut insertions = Vec::new();
-    let mut curr_ident: Option<Ident> = None;
     for pair in pairs {
         match pair.as_rule() {
-            Rule::ident => {
-                if let Some(ident) = curr_ident.take() {
-                    insertions.push(Insertion {
-                        ident: ident.name.clone(),
-                        term: Term::Ident(ident),
-                    })
-                }
-                curr_ident = Some(parse_ident(pair));
-            }
-            Rule::term => {
-                let ident = curr_ident.take().unwrap();
-                let term = parse_term(pair)?;
-                insertions.push(Insertion {
-                    ident: ident.name,
-                    term,
-                });
+            Rule::insertion => {
+                let mut pairs = pair.into_inner();
+                let key = parse_term(pairs.next().unwrap())?;
+                let val = pairs.next().map(parse_term).transpose()?;
+                insertions.push(Insertion { key, val });
             }
             rule => unreachable!("{:?}", rule),
         }

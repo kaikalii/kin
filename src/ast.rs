@@ -269,8 +269,8 @@ impl<'a> fmt::Display for CallExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Insertion<'a> {
-    pub ident: String,
-    pub term: Term<'a>,
+    pub key: Term<'a>,
+    pub val: Option<Term<'a>>,
 }
 
 #[derive(Debug, Clone)]
@@ -284,16 +284,22 @@ impl<'a> fmt::Display for InsertExpr<'a> {
         write!(f, "{}", self.term)?;
         match self.insertions.len() {
             0 => {}
-            1 => write!(
-                f,
-                " :{} {}",
-                self.insertions[0].ident, self.insertions[0].term
-            )?,
-            _ => {
-                for ins in &self.insertions {
-                    write!(f, "\n    :{} {}", ins.ident, ins.term)?;
+            1 => {
+                write!(f, " :{}", self.insertions[0].key)?;
+                if let Some(val) = &self.insertions[0].val {
+                    write!(f, " {}", val)?;
                 }
-                write!(f, "\nend")?;
+            }
+            _ => {
+                writeln!(f)?;
+                for ins in &self.insertions {
+                    write!(f, "    :{}", ins.key)?;
+                    if let Some(val) = &ins.val {
+                        write!(f, " {}", val)?;
+                    }
+                    writeln!(f)?;
+                }
+                write!(f, "end")?;
             }
         }
         Ok(())
