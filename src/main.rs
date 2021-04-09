@@ -3,6 +3,7 @@
 mod ast;
 mod parse;
 mod transpile;
+mod types;
 
 fn main() {
     use std::process::*;

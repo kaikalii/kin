@@ -379,7 +379,7 @@ NootValue noot_not(NootValue val) {
 
 int noot_is_true(NootValue val) {
     if (val.type == Bool) return val.data.Bool;
-    else return val.type != Nil;
+    else return val.type != Nil && val.type != Error;
 }
 
 NootList noot_list_push(NootList old, NootValue val) {
