@@ -23,7 +23,7 @@ fn main() {
                 transpilation.write().unwrap();
                 let status = Command::new("gcc")
                     .arg("build/main.c")
-                    .arg("build/tgc.c")
+                    .arg("clibs/tgc.c")
                     .arg("-o")
                     .arg("test")
                     .spawn()

@@ -51,13 +51,14 @@ struct NootDef {
     c_name: String,
 }
 
-macro_rules! builtins {
+macro_rules! builtin_functions {
     ($($name:literal),*) => {
         &[$(($name, concat!("noot_", $name))),*]
     }
 }
 
-const BUILTINS: &[(&str, &str)] = builtins!("print", "println");
+const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!("print", "println");
+const BUILTIN_VALUES: &[(&str, &str)] = &[("list", "NOOT_EMPTY_LIST")];
 
 #[derive(Clone)]
 struct TranspileStack {
@@ -68,7 +69,7 @@ impl TranspileStack {
     pub fn new() -> Self {
         TranspileStack {
             noot_scopes: Vector::new().push_back(
-                BUILTINS
+                BUILTIN_FUNCTIONS
                     .iter()
                     .map(|&(noot_name, c_name)| {
                         (
@@ -79,6 +80,15 @@ impl TranspileStack {
                             },
                         )
                     })
+                    .chain(BUILTIN_VALUES.iter().map(|&(noot_name, c_name)| {
+                        (
+                            noot_name.into(),
+                            NootDef {
+                                c_name: c_name.into(),
+                                is_function: false,
+                            },
+                        )
+                    }))
                     .collect(),
             ),
         }
@@ -214,14 +224,9 @@ impl<'a> Transpilation<'a> {
         fs::create_dir_all("build")?;
         let mut source = File::create("build/main.c")?;
 
-        // Copy source files
-        for name in &["noot.h", "tgc.c", "tgc.h", "utf8.h"] {
-            fs::copy(format!("clibs/{}", name), format!("build/{}", name))?;
-        }
-
         // Write headers
-        writeln!(source, "#include \"noot.h\"")?;
-        writeln!(source, "#include \"tgc.h\"")?;
+        writeln!(source, "#include \"../clibs/noot.h\"")?;
+        writeln!(source, "#include \"../clibs/tgc.h\"")?;
         writeln!(source)?;
 
         // Write function declarations
@@ -430,7 +435,7 @@ impl<'a> Transpilation<'a> {
             Node::BinExpr(expr) => self.bin_expr(expr, stack),
             Node::UnExpr(expr) => self.un_expr(expr, stack),
             Node::Call(expr) => self.call_expr(expr, stack),
-            _ => todo!(),
+            Node::Insert(expr) => self.insert_expr(expr, stack),
         }
     }
     fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack) -> Self {
@@ -506,6 +511,23 @@ impl<'a> Transpilation<'a> {
                 f, param_count, params
             ))
         })
+    }
+    fn insert_expr(self, expr: InsertExpr<'a>, stack: TranspileStack) -> Self {
+        let (result, term) = self.term(expr.term, stack.clone()).pop_expr();
+        let (result, expr) =
+            expr.insertions
+                .into_iter()
+                .fold((result, term), |(result, inner), ins| {
+                    let (result, key) = result.term(ins.key, stack.clone()).pop_expr();
+                    let (result, val) = if let Some(val) = ins.val {
+                        let (result, val) = result.term(val, stack.clone()).pop_expr();
+                        (result, format!("&{}", val))
+                    } else {
+                        (result, "NULL".into())
+                    };
+                    (result, format!("noot_insert({}, {}, {})", inner, key, val))
+                });
+        result.map_c_function(|cf| cf.push_expr(expr))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack) -> Self {
         match term {
