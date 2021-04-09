@@ -350,6 +350,9 @@ impl<'a> Transpilation<'a> {
         let last_index = self.function_stack.len() - 1;
         self.map_c_function_at(last_index, f)
     }
+    fn push_expr(self, expr: String) -> Self {
+        self.map_c_function(|cf| cf.push_expr(expr))
+    }
     fn pop_expr(self) -> (Self, String) {
         let mut expr = None;
         let result = self.map_c_function(|cf| {
@@ -485,7 +488,7 @@ impl<'a> Transpilation<'a> {
         };
         let result = result.node(*expr.right, stack);
         let (result, right) = result.pop_expr();
-        result.map_c_function(|cf| cf.push_expr(format!("{}({}, {})", f, left, right)))
+        result.push_expr(format!("{}({}, {})", f, left, right))
     }
     fn un_expr(self, expr: UnExpr<'a>, stack: TranspileStack) -> Self {
         let result = self.node(*expr.inner, stack);
@@ -494,7 +497,7 @@ impl<'a> Transpilation<'a> {
             UnOp::Neg => "noot_neg",
             UnOp::Not => "noot_not",
         };
-        result.map_c_function(|cf| cf.push_expr(format!("{}({})", f, inner)))
+        result.push_expr(format!("{}({})", f, inner))
     }
     fn call_expr(self, call: CallExpr<'a>, stack: TranspileStack) -> Self {
         let result = self.node(*call.expr, stack.clone());
@@ -513,12 +516,10 @@ impl<'a> Transpilation<'a> {
             .cloned()
             .intersperse(", ".into())
             .collect();
-        result.map_c_function(|cf| {
-            cf.push_expr(format!(
-                "noot_call({}, {}, (NootValue[]) {{ {} }})",
-                f, param_count, params
-            ))
-        })
+        result.push_expr(format!(
+            "noot_call({}, {}, (NootValue[]) {{ {} }})",
+            f, param_count, params
+        ))
     }
     fn insert_expr(self, expr: InsertExpr<'a>, stack: TranspileStack) -> Self {
         let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
@@ -535,7 +536,7 @@ impl<'a> Transpilation<'a> {
                     };
                     (result, format!("noot_insert({}, {}, {})", inner, key, val))
                 });
-        result.map_c_function(|cf| cf.push_expr(expr))
+        result.push_expr(expr)
     }
     fn get_expr(self, expr: GetExpr<'a>, stack: TranspileStack) -> Self {
         let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
@@ -546,24 +547,20 @@ impl<'a> Transpilation<'a> {
                 format!("new_string({:?}, {})", ident.name, ident.name.len()),
             ),
         };
-        result.map_c_function(|cf| cf.push_expr(format!("noot_get({}, {})", inner, index)))
+        result.push_expr(format!("noot_get({}, {})", inner, index))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack) -> Self {
         match term {
-            Term::Nil => self.map_c_function(|cf| cf.push_expr("NOOT_NIL".into())),
-            Term::Bool(b) => {
-                self.map_c_function(|cf| cf.push_expr(format!("new_bool({})", b as u8)))
-            }
-            Term::Int(i) => self.map_c_function(|cf| cf.push_expr(format!("new_int({})", i))),
-            Term::Real(f) => self.map_c_function(|cf| cf.push_expr(format!("new_real({})", f))),
-            Term::String(s) => {
-                self.map_c_function(|cf| cf.push_expr(format!("new_string({:?}, {})", s, s.len())))
-            }
+            Term::Nil => self.push_expr("NOOT_NIL".into()),
+            Term::Bool(b) => self.push_expr(format!("new_bool({})", b as u8)),
+            Term::Int(i) => self.push_expr(format!("new_int({})", i)),
+            Term::Real(f) => self.push_expr(format!("new_real({})", f)),
+            Term::String(s) => self.push_expr(format!("new_string({:?}, {})", s, s.len())),
             Term::Expr(items) => self.items(items, stack),
             Term::Closure(closure) => {
                 let c_name = self.c_name_for("closure", true);
                 let result = self.function(c_name.clone(), closure.params, closure.body, stack);
-                result.map_c_function(|cf| cf.push_expr(format!("new_function(&{})", c_name)))
+                result.push_expr(format!("new_function(&{})", c_name))
             }
             Term::Ident(ident) => {
                 if let Some(def) = stack
@@ -621,19 +618,17 @@ impl<'a> Transpilation<'a> {
                         result
                     } else {
                         // Non-captures
-                        self.map_c_function(|cf| {
-                            cf.push_expr(if def.is_function {
-                                format!("new_function(&{})", def.c_name)
-                            } else {
-                                def.c_name.clone()
-                            })
+                        self.push_expr(if def.is_function {
+                            format!("new_function(&{})", def.c_name)
+                        } else {
+                            def.c_name.clone()
                         })
                     }
                 } else if let Some(&(_, c_name)) = BUILTIN_VALUES
                     .iter()
                     .find(|(noot_name, _)| noot_name == &ident.name)
                 {
-                    self.map_c_function(|cf| cf.push_expr(c_name.into()))
+                    self.push_expr(c_name.into())
                 } else {
                     self.error(UnknownDef(ident.name.clone()).span(ident.span))
                 }
