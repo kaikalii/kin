@@ -31,7 +31,7 @@ typedef struct NootValue NootValue;
 
 typedef struct NootListEntry NootListEntry;
 
-typedef NootValue(*NootFn)(int, NootValue* args);
+typedef NootValue(*NootFn)(uint8_t, NootValue* args);
 
 typedef struct NootListShared {
     size_t capacity;
@@ -129,7 +129,7 @@ NootValue noot_list_get(NootList list, int i) {
     return entry->val;
 }
 
-NootValue noot_print(int count, NootValue* args) {
+NootValue noot_print(uint8_t count, NootValue* args) {
     NootValue val = count >= 1 ? args[0] : NOOT_NIL;
     switch (val.type) {
     case Nil:
@@ -162,7 +162,7 @@ NootValue noot_print(int count, NootValue* args) {
     return NOOT_NIL;
 }
 
-NootValue noot_println(int count, NootValue* args) {
+NootValue noot_println(uint8_t count, NootValue* args) {
     NootValue res = noot_print(count, args);
     printf("\n");
     return res;
@@ -451,7 +451,7 @@ NootValue noot_get(NootValue con, NootValue key) {
     }
 }
 
-NootValue noot_len(int count, NootValue* args) {
+NootValue noot_len(uint8_t count, NootValue* args) {
     switch (args[0].type) {
     case String: return new_int(args[0].data.String.len);
     case List: return new_int(args[0].data.List.len);

@@ -231,7 +231,11 @@ impl<'a> Transpilation<'a> {
 
         // Write function declarations
         for (name, cf) in self.functions.iter().filter(|&(name, _)| name != "main") {
-            writeln!(source, "NootValue {}(int count, NootValue* args);", name)?;
+            writeln!(
+                source,
+                "NootValue {}(uint8_t count, NootValue* args);",
+                name
+            )?;
             if !cf.captures.is_empty() {
                 writeln!(source, "static NootValue* {}_captures;", name)?;
             }
@@ -246,7 +250,11 @@ impl<'a> Transpilation<'a> {
                 writeln!(source, "int main(int argc, char** argv) {{")?;
                 writeln!(source, "    tgc_start(&noot_gc, &argc);")?;
             } else {
-                writeln!(source, "NootValue {}(int count, NootValue* args) {{", name)?;
+                writeln!(
+                    source,
+                    "NootValue {}(uint8_t count, NootValue* args) {{",
+                    name
+                )?;
             }
             // Write lines
             for line in &cf.lines {
@@ -647,7 +655,7 @@ impl<'a> Transpilation<'a> {
                 stack.with_noot_def(
                     param.ident.name,
                     NootDef {
-                        c_name: format!("args[{}]", i),
+                        c_name: format!("{} < count ? args[{}] : NOOT_NIL", i, i),
                         is_function: false,
                     },
                 )
