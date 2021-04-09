@@ -61,6 +61,7 @@ const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!("print", "println"
 const BUILTIN_VALUES: &[(&str, &str)] = &[("list", "NOOT_EMPTY_LIST")];
 
 static RESERVED_NAMES: &[&str] = &[
+    // C keywords
     "auto",
     "break",
     "case",
@@ -95,6 +96,8 @@ static RESERVED_NAMES: &[&str] = &[
     "void",
     "volatile",
     "while",
+    // Others
+    "count",
 ];
 
 #[derive(Clone)]
@@ -293,13 +296,6 @@ impl<'a> Transpilation<'a> {
                     "NootValue {}(uint8_t count, NootValue* args) {{",
                     name
                 )?;
-                for i in 0..cf.max_arg {
-                    writeln!(
-                        source,
-                        "    NootValue arg{i} = {i} < count ? args[{i}] : NOOT_NIL;",
-                        i = i
-                    )?;
-                }
             }
             // Write lines
             for line in &cf.lines {
@@ -689,9 +685,13 @@ impl<'a> Transpilation<'a> {
         stack: TranspileStack,
     ) -> Self {
         let result = self.start_c_function(c_name.clone());
-        let result = result.map_c_function(|cf| CFunction {
-            max_arg: params.len(),
-            ..cf
+        let result = result.map_c_function(|cf| {
+            (0..params.len()).fold(cf, |cf, i| {
+                cf.with_line(
+                    Some(format!("arg{}", i)),
+                    format!("{i} < count ? args[{i}] : NOOT_NIL", i = i),
+                )
+            })
         });
         let stack = params
             .into_iter()
