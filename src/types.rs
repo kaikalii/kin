@@ -1,10 +1,11 @@
 use std::fmt;
 
-use rpds::{RedBlackTreeSet, Vector};
+use rpds::RedBlackTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Type {
-    Function(Vector<TypeSet>, TypeSet),
+    Any,
+    Function(TypeSet),
     List(TypeSet),
     String,
     Int,
@@ -17,18 +18,14 @@ pub enum Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Type::Any => "any".fmt(f),
             Type::Nil => "nil".fmt(f),
             Type::Bool => "bool".fmt(f),
             Type::Int => "int".fmt(f),
             Type::Real => "real".fmt(f),
             Type::String => "string".fmt(f),
             Type::List(inner) => write!(f, "list of {}", inner),
-            Type::Function(params, ret) => {
-                for param in params {
-                    write!(f, "{} -> ", param)?;
-                }
-                write!(f, "{}", ret)
-            }
+            Type::Function(ret) => ret.fmt(f),
             Type::Err(inner) => write!(f, "err({})", inner),
         }
     }
@@ -60,10 +57,11 @@ pub struct TypeError {
 pub type TypeResult = Result<Type, TypeError>;
 pub type TypeSetResult = Result<TypeSet, TypeError>;
 
-type ErrorMessageFn = fn(&dyn fmt::Display, &dyn fmt::Display) -> String;
+type BinErrorMessageFn = fn(&dyn fmt::Display, &dyn fmt::Display) -> String;
+type UnErrorMessageFn = fn(&dyn fmt::Display) -> String;
 
 impl Type {
-    pub fn bin_math_op(&self, other: &Self, error_message: ErrorMessageFn) -> TypeResult {
+    pub fn bin_math_op(&self, other: &Self, error_message: BinErrorMessageFn) -> TypeResult {
         Ok(match (self, other) {
             (Type::Int, Type::Int) => Type::Int,
             (Type::Int, Type::Real) | (Type::Real, Type::Int) | (Type::Real, Type::Real) => {
@@ -78,6 +76,14 @@ impl Type {
     }
 }
 
+impl From<Type> for TypeSet {
+    fn from(ty: Type) -> Self {
+        TypeSet {
+            types: RedBlackTreeSet::new().insert(ty),
+        }
+    }
+}
+
 impl TypeSet {
     pub fn new() -> Self {
         Self::default()
@@ -87,9 +93,9 @@ impl TypeSet {
             types: self.types.insert(ty),
         }
     }
-    pub fn join<F>(&self, other: &Self, f: F, error_message: ErrorMessageFn) -> TypeSetResult
+    pub fn join<F>(&self, other: &Self, f: F, error_message: BinErrorMessageFn) -> TypeSetResult
     where
-        F: Fn(&Type, &Type, ErrorMessageFn) -> TypeResult,
+        F: Fn(&Type, &Type, BinErrorMessageFn) -> TypeResult,
     {
         let f = &f;
         let type_results: Vec<_> = self
@@ -112,6 +118,16 @@ impl TypeSet {
             types: type_results.into_iter().map(Result::unwrap).collect(),
         })
     }
+    pub fn union(self, other: Self) -> Self {
+        TypeSet {
+            types: self
+                .types
+                .iter()
+                .chain(other.types.iter())
+                .cloned()
+                .collect(),
+        }
+    }
     pub fn add(&self, other: &Self) -> TypeSetResult {
         self.join(other, Type::bin_math_op, |a, b| {
             format!("{} cannot be added to {}", b, a)
@@ -131,5 +147,57 @@ impl TypeSet {
         self.join(other, Type::bin_math_op, |a, b| {
             format!("{} cannot be divided by {}", b, a)
         })
+    }
+    pub fn compare(&self, other: &Self) -> TypeSetResult {
+        self.join(
+            other,
+            |a, b, error| {
+                if a == b {
+                    Ok(Type::Bool)
+                } else {
+                    Err(TypeError {
+                        message: error(a, b),
+                    })
+                }
+            },
+            |a, b| format!("{} cannot be compared to {}", a, b),
+        )
+    }
+    pub fn un_op(
+        &self,
+        f: fn(&Type, UnErrorMessageFn) -> TypeResult,
+        error_message: UnErrorMessageFn,
+    ) -> TypeSetResult {
+        let type_results: Vec<_> = self
+            .types
+            .iter()
+            .map(move |ty| f(ty, error_message))
+            .collect();
+        for res in &type_results {
+            if let Err(e) = res {
+                return Err(TypeError {
+                    message: format!(
+                        "Invalid operation: {} because {}",
+                        error_message(&self),
+                        e.message
+                    ),
+                });
+            }
+        }
+        Ok(TypeSet {
+            types: type_results.into_iter().map(Result::unwrap).collect(),
+        })
+    }
+    pub fn negate(&self) -> TypeSetResult {
+        self.un_op(
+            |ty, error| {
+                Ok(match ty {
+                    Type::Int => Type::Int,
+                    Type::Real => Type::Real,
+                    ty => return Err(TypeError { message: error(ty) }),
+                })
+            },
+            |ty| format!("{} cannot be negated", ty),
+        )
     }
 }

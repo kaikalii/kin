@@ -12,15 +12,15 @@ use pest::{
 };
 use rpds::{List, Queue, RedBlackTreeMap, Vector};
 
-use crate::{ast::*, parse::Rule};
+use crate::{ast::*, parse::Rule, types::*};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TranspileErrorKind {
-    #[error("Unknown definition {}", _0)]
+    #[error("Unknown definition {0}")]
     UnknownDef(String),
+    #[error("{0}")]
+    Type(TypeError),
 }
-
-use TranspileErrorKind::*;
 
 impl TranspileErrorKind {
     pub fn span(self, span: Span) -> TranspileError {
@@ -58,7 +58,10 @@ macro_rules! builtin_functions {
 }
 
 const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!("print", "println", "len");
-const BUILTIN_VALUES: &[(&str, &str)] = &[("list", "NOOT_EMPTY_LIST")];
+
+fn builtin_values() -> impl Iterator<Item = (&'static str, &'static str, Type)> {
+    once(("list", "NOOT_EMPTY_LIST", Type::Nil))
+}
 
 static RESERVED_NAMES: &[&str] = &[
     // C keywords
@@ -120,7 +123,7 @@ impl TranspileStack {
                             },
                         )
                     })
-                    .chain(BUILTIN_VALUES.iter().map(|&(noot_name, c_name)| {
+                    .chain(builtin_values().map(|(noot_name, c_name, _)| {
                         (
                             noot_name.into(),
                             NootDef {
@@ -154,19 +157,54 @@ pub struct Transpilation<'a> {
 }
 
 #[derive(Default, Clone)]
+struct TypedExpr {
+    pub string: String,
+    pub ty: TypeSet,
+}
+
+impl TypedExpr {
+    pub fn new<S, T>(string: S, ty: T) -> Self
+    where
+        S: Into<String>,
+        T: Into<TypeSet>,
+    {
+        TypedExpr {
+            string: string.into(),
+            ty: ty.into(),
+        }
+    }
+}
+
+#[derive(Default, Clone)]
 struct CFunction {
-    exprs: Queue<String>,
+    exprs: Queue<TypedExpr>,
     lines: Vector<CLine>,
     captures: Vector<CCapture>,
     indent: usize,
-    max_arg: usize,
 }
 
 struct CLine {
-    var_name: Option<String>,
+    var: Option<CVar>,
     value: String,
     indent: usize,
     semicolon: bool,
+}
+
+struct CVar {
+    pub name: String,
+    pub decl: bool,
+}
+
+impl CVar {
+    pub fn new(name: String) -> Self {
+        CVar { name, decl: true }
+    }
+    fn no_decl(self) -> Self {
+        CVar {
+            decl: false,
+            ..self
+        }
+    }
 }
 
 struct CCapture {
@@ -175,10 +213,10 @@ struct CCapture {
 }
 
 impl CFunction {
-    pub fn with_line(self, var_name: Option<String>, value: String) -> Self {
+    pub fn with_line(self, var: Option<CVar>, value: String) -> Self {
         CFunction {
             lines: self.lines.push_back(CLine {
-                var_name,
+                var,
                 value,
                 indent: self.indent,
                 semicolon: true,
@@ -189,7 +227,7 @@ impl CFunction {
     pub fn with_raw_line(self, value: String) -> Self {
         CFunction {
             lines: self.lines.push_back(CLine {
-                var_name: None,
+                var: None,
                 value,
                 indent: self.indent,
                 semicolon: false,
@@ -197,13 +235,13 @@ impl CFunction {
             ..self
         }
     }
-    pub fn push_expr(self, expr: String) -> Self {
+    pub fn push_expr(self, expr: TypedExpr) -> Self {
         CFunction {
             exprs: self.exprs.enqueue(expr),
             ..self
         }
     }
-    pub fn pop_expr(self) -> (Self, Option<String>) {
+    pub fn pop_expr(self) -> (Self, Option<TypedExpr>) {
         let expr = self.exprs.peek().cloned();
         (
             CFunction {
@@ -300,8 +338,13 @@ impl<'a> Transpilation<'a> {
             // Write lines
             for line in &cf.lines {
                 write!(source, "{:indent$}", "", indent = (line.indent + 1) * 4)?;
-                if let Some(var_name) = &line.var_name {
-                    write!(source, "NootValue {} = ", var_name)?;
+                if let Some(var) = &line.var {
+                    write!(
+                        source,
+                        "{} {} = ",
+                        if var.decl { "NootValue" } else { "" },
+                        var.name
+                    )?;
                 }
                 writeln!(
                     source,
@@ -313,7 +356,7 @@ impl<'a> Transpilation<'a> {
             // Clean up main
             if main {
                 if let (_, Some(expr)) = cf.clone().pop_expr() {
-                    writeln!(source, "    {};", expr)?;
+                    writeln!(source, "    {};", expr.string)?;
                 }
                 writeln!(source, "    tgc_stop(&noot_gc);")?;
                 writeln!(source, "    return 0;")?;
@@ -332,8 +375,8 @@ impl<'a> Transpilation<'a> {
                     .functions
                     .values()
                     .flat_map(|cf| &cf.lines)
-                    .filter_map(|cf| cf.var_name.as_ref())
-                    .any(|var_name| var_name == c_name)
+                    .filter_map(|cf| cf.var.as_ref())
+                    .any(|var| var.name == c_name)
     }
     fn c_name_for(&self, noot_name: &str, function: bool) -> String {
         let mut c_name = noot_name.to_owned();
@@ -357,12 +400,12 @@ impl<'a> Transpilation<'a> {
                 .exprs
                 .peek()
                 .cloned()
-                .unwrap_or_else(|| "NOOT_NIL".into());
+                .unwrap_or_else(|| TypedExpr::new("NOOT_NIL", Type::Nil));
             let cf = CFunction {
                 exprs: cf.exprs.dequeue().unwrap_or_default(),
                 ..cf
             };
-            cf.with_line(None, format!("return {}", ret_expr))
+            cf.with_line(None, format!("return {}", ret_expr.string))
         });
         Transpilation {
             function_stack: result.function_stack.drop_last().unwrap(),
@@ -392,17 +435,20 @@ impl<'a> Transpilation<'a> {
         let last_index = self.function_stack.len() - 1;
         self.map_c_function_at(last_index, f)
     }
-    fn push_expr(self, expr: String) -> Self {
+    fn push_expr(self, expr: TypedExpr) -> Self {
         self.map_c_function(|cf| cf.push_expr(expr))
     }
-    fn pop_expr(self) -> (Self, String) {
+    fn pop_expr(self) -> (Self, TypedExpr) {
         let mut expr = None;
         let result = self.map_c_function(|cf| {
             let (cf, ex) = cf.pop_expr();
             expr = ex;
             cf
         });
-        (result, expr.unwrap_or_else(|| "NOOT_NIL".into()))
+        (
+            result,
+            expr.unwrap_or_else(|| TypedExpr::new("NOOT_NIL", Type::Nil)),
+        )
     }
     fn error(self, error: TranspileError<'a>) -> Self {
         Transpilation {
@@ -426,7 +472,7 @@ impl<'a> Transpilation<'a> {
                                 exprs: cf.exprs.dequeue().unwrap_or_default(),
                                 ..cf
                             };
-                            cf.with_line(None, expr)
+                            cf.with_line(None, expr.string)
                         } else {
                             cf
                         }
@@ -466,7 +512,7 @@ impl<'a> Transpilation<'a> {
             let result = result.map_c_function(|cf| {
                 let (cf, line) = cf.pop_expr();
                 if let Some(line) = line {
-                    cf.with_line(Some(c_name.clone()), line)
+                    cf.with_line(Some(CVar::new(c_name.clone())), line.string)
                 } else {
                     cf
                 }
@@ -494,52 +540,67 @@ impl<'a> Transpilation<'a> {
     fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack) -> Self {
         let result = self.node(*expr.left, stack.clone());
         let (result, left) = result.pop_expr();
-        let f = match expr.op {
-            BinOp::Or | BinOp::And => {
-                let or = expr.op == BinOp::Or;
-                let temp_name = result.c_name_for("temp", false);
-                let result = result.map_c_function(|cf| {
-                    cf.with_line(Some(temp_name.clone()), left)
-                        .with_raw_line(format!(
-                            "if ({}noot_is_true({})) {{",
-                            if or { "!" } else { "" },
-                            temp_name
-                        ))
-                        .indent()
-                });
-                let result = result.node(*expr.right, stack);
-                let (result, right) = result.pop_expr();
-                return result.map_c_function(|cf| {
-                    cf.with_raw_line(format!("{} = {};", temp_name, right))
-                        .deindent()
-                        .with_raw_line("}".into())
-                        .push_expr(temp_name)
-                });
-            }
-            BinOp::Is => "noot_eq",
-            BinOp::Isnt => "noot_neq",
-            BinOp::Less => "noot_lt",
-            BinOp::LessOrEqual => "noot_le",
-            BinOp::Greater => "noot_gt",
-            BinOp::GreaterOrEqual => "noot_ge",
-            BinOp::Add => "noot_add",
-            BinOp::Sub => "noot_sub",
-            BinOp::Mul => "noot_mul",
-            BinOp::Div => "noot_div",
-            BinOp::Rem => "noot_rem",
-        };
+        let (c_function_name, type_check): (&'static str, fn(&TypeSet, &TypeSet) -> TypeSetResult) =
+            match expr.op {
+                BinOp::Or | BinOp::And => {
+                    let or = expr.op == BinOp::Or;
+                    let temp_name = result.c_name_for("temp", false);
+                    let result = result.map_c_function(|cf| {
+                        cf.with_line(Some(CVar::new(temp_name.clone())), left.string.clone())
+                            .with_raw_line(format!(
+                                "if ({}noot_is_true({})) {{",
+                                if or { "!" } else { "" },
+                                temp_name
+                            ))
+                            .indent()
+                    });
+                    let result = result.node(*expr.right, stack);
+                    let (result, right) = result.pop_expr();
+                    return result.map_c_function(|cf| {
+                        cf.with_line(Some(CVar::new(temp_name.clone()).no_decl()), right.string)
+                            .deindent()
+                            .with_raw_line("}".into())
+                            .push_expr(TypedExpr::new(temp_name, left.ty.union(right.ty)))
+                    });
+                }
+                BinOp::Is => ("noot_eq", TypeSet::compare),
+                BinOp::Isnt => ("noot_neq", TypeSet::compare),
+                BinOp::Less => ("noot_lt", TypeSet::compare),
+                BinOp::LessOrEqual => ("noot_le", TypeSet::compare),
+                BinOp::Greater => ("noot_gt", TypeSet::compare),
+                BinOp::GreaterOrEqual => ("noot_ge", TypeSet::compare),
+                BinOp::Add => ("noot_add", TypeSet::add),
+                BinOp::Sub => ("noot_sub", TypeSet::sub),
+                BinOp::Mul => ("noot_mul", TypeSet::mul),
+                BinOp::Div => ("noot_div", TypeSet::div),
+                BinOp::Rem => ("noot_rem", TypeSet::div),
+            };
         let result = result.node(*expr.right, stack);
         let (result, right) = result.pop_expr();
-        result.push_expr(format!("{}({}, {})", f, left, right))
+        let (result, new_type) = match type_check(&left.ty, &right.ty) {
+            Ok(new_type) => (result, new_type),
+            Err(e) => (
+                result.error(TranspileErrorKind::Type(e).span(Span::new("", 0, 0).unwrap())),
+                Type::Any.into(),
+            ),
+        };
+        result.push_expr(TypedExpr::new(
+            format!("{}({}, {})", c_function_name, left.string, right.string),
+            new_type,
+        ))
     }
     fn un_expr(self, expr: UnExpr<'a>, stack: TranspileStack) -> Self {
         let result = self.node(*expr.inner, stack);
         let (result, inner) = result.pop_expr();
-        let f = match expr.op {
-            UnOp::Neg => "noot_neg",
-            UnOp::Not => "noot_not",
-        };
-        result.push_expr(format!("{}({})", f, inner))
+        let (c_function_name, type_check): (&'static str, fn(&TypeSet) -> TypeSetResult) =
+            match expr.op {
+                UnOp::Neg => ("noot_neg", TypeSet::negate),
+                UnOp::Not => ("noot_not", |_| Ok(Type::Bool.into())),
+            };
+        result.push_expr(TypedExpr::new(
+            format!("{}({})", c_function_name, inner.string),
+            type_check(&inner.ty).unwrap(),
+        ))
     }
     fn call_expr(self, call: CallExpr<'a>, stack: TranspileStack) -> Self {
         let result = self.node(*call.expr, stack.clone());
@@ -553,14 +614,18 @@ impl<'a> Transpilation<'a> {
                     (result, params.push_back(param))
                 });
         let param_count = params.len();
+        // TODO: Type checking
         let params: String = params
-            .into_iter()
-            .cloned()
+            .iter()
+            .map(|p| p.string.clone())
             .intersperse(", ".into())
             .collect();
-        result.push_expr(format!(
-            "noot_call({}, {}, (NootValue[]) {{ {} }})",
-            f, param_count, params
+        result.push_expr(TypedExpr::new(
+            format!(
+                "noot_call({}, {}, (NootValue[]) {{ {} }})",
+                f.string, param_count, params
+            ),
+            Type::Nil,
         ))
     }
     fn insert_expr(self, expr: InsertExpr<'a>, stack: TranspileStack) -> Self {
@@ -570,39 +635,62 @@ impl<'a> Transpilation<'a> {
                 .into_iter()
                 .fold((result, inner), |(result, inner), ins| {
                     let (result, key) = result.node(ins.key, stack.clone()).pop_expr();
+                    // TODO: Type checking
                     let (result, val) = if let Some(val) = ins.val {
                         let (result, val) = result.node(val, stack.clone()).pop_expr();
-                        (result, format!("&{}", val))
+                        (result, format!("&{}", val.string))
                     } else {
                         (result, "NULL".into())
                     };
-                    (result, format!("noot_insert({}, {}, {})", inner, key, val))
+                    (
+                        result,
+                        TypedExpr::new(
+                            format!("noot_insert({}, {}, {})", inner.string, key.string, val),
+                            Type::Nil,
+                        ),
+                    )
                 });
         result.push_expr(expr)
     }
     fn get_expr(self, expr: GetExpr<'a>, stack: TranspileStack) -> Self {
         let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
+        // TODO: Type checking
         let (result, index) = match expr.get {
             Get::Index(term) => result.term(term, stack).pop_expr(),
             Get::Field(ident) => (
                 result,
-                format!("new_string({:?}, {})", ident.name, ident.name.len()),
+                TypedExpr::new(
+                    format!("new_string({:?}, {})", ident.name, ident.name.len()),
+                    Type::Nil,
+                ),
             ),
         };
-        result.push_expr(format!("noot_get({}, {})", inner, index))
+        result.push_expr(TypedExpr::new(
+            format!("noot_get({}, {})", inner.string, index.string),
+            Type::Nil,
+        ))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack) -> Self {
         match term {
-            Term::Nil => self.push_expr("NOOT_NIL".into()),
-            Term::Bool(b) => self.push_expr(format!("new_bool({})", b as u8)),
-            Term::Int(i) => self.push_expr(format!("new_int({})", i)),
-            Term::Real(f) => self.push_expr(format!("new_real({})", f)),
-            Term::String(s) => self.push_expr(format!("new_string({:?}, {})", s, s.len())),
+            Term::Nil => self.push_expr(TypedExpr::new("NOOT_NIL", Type::Nil)),
+            Term::Bool(b) => {
+                self.push_expr(TypedExpr::new(format!("new_bool({})", b as u8), Type::Bool))
+            }
+            Term::Int(i) => self.push_expr(TypedExpr::new(format!("new_int({})", i), Type::Int)),
+            Term::Real(f) => self.push_expr(TypedExpr::new(format!("new_real({})", f), Type::Real)),
+            Term::String(s) => self.push_expr(TypedExpr::new(
+                format!("new_string({:?}, {})", s, s.len()),
+                Type::String,
+            )),
             Term::Expr(items) => self.items(items, stack),
             Term::Closure(closure) => {
                 let c_name = self.c_name_for("closure", true);
                 let result = self.function(c_name.clone(), closure.params, closure.body, stack);
-                result.push_expr(format!("new_function(&{})", c_name))
+                // TODO: Type assignment
+                result.push_expr(TypedExpr::new(
+                    format!("new_function(&{})", c_name),
+                    Type::Function(Type::Nil.into()),
+                ))
             }
             Term::Ident(ident) => {
                 if let Some(def) = stack
@@ -617,7 +705,7 @@ impl<'a> Transpilation<'a> {
                         .position(|c_name| {
                             let cf = self.functions.get(c_name).unwrap();
                             cf.lines.iter().any(|line| {
-                                line.var_name.as_ref().map_or(false, |vn| vn == &def.c_name)
+                                line.var.as_ref().map_or(false, |vn| vn.name == def.c_name)
                             })
                         })
                         .filter(|&i| self.function_stack.len() - i > 1)
@@ -634,9 +722,10 @@ impl<'a> Transpilation<'a> {
                                 let result = if last {
                                     result.map_c_function(|cf| {
                                         let cap_i = cf.capture_index_of(&def.c_name);
-                                        cf.push_expr(format!(
-                                            "{}_captures[{}]",
-                                            function_name, cap_i
+                                        // TODO: Type assignment
+                                        cf.push_expr(TypedExpr::new(
+                                            format!("{}_captures[{}]", function_name, cap_i),
+                                            Type::Nil,
                                         ))
                                     })
                                 } else {
@@ -660,19 +749,22 @@ impl<'a> Transpilation<'a> {
                         result
                     } else {
                         // Non-captures
-                        self.push_expr(if def.is_function {
-                            format!("new_function(&{})", def.c_name)
-                        } else {
-                            def.c_name.clone()
-                        })
+                        // TODO: Type assignment
+                        self.push_expr(TypedExpr::new(
+                            if def.is_function {
+                                format!("new_function(&{})", def.c_name)
+                            } else {
+                                def.c_name.clone()
+                            },
+                            Type::Nil,
+                        ))
                     }
-                } else if let Some(&(_, c_name)) = BUILTIN_VALUES
-                    .iter()
-                    .find(|(noot_name, _)| noot_name == &ident.name)
+                } else if let Some((_, c_name, ty)) =
+                    builtin_values().find(|(noot_name, _, _)| noot_name == &ident.name)
                 {
-                    self.push_expr(c_name.into())
+                    self.push_expr(TypedExpr::new(c_name, ty))
                 } else {
-                    self.error(UnknownDef(ident.name.clone()).span(ident.span))
+                    self.error(TranspileErrorKind::UnknownDef(ident.name.clone()).span(ident.span))
                 }
             }
         }
@@ -688,7 +780,7 @@ impl<'a> Transpilation<'a> {
         let result = result.map_c_function(|cf| {
             (0..params.len()).fold(cf, |cf, i| {
                 cf.with_line(
-                    Some(format!("arg{}", i)),
+                    Some(CVar::new(format!("arg{}", i))),
                     format!("{i} < count ? args[{i}] : NOOT_NIL", i = i),
                 )
             })
