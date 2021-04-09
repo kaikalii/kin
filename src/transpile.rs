@@ -553,12 +553,17 @@ impl<'a> Transpilation<'a> {
                     .rev()
                     .find_map(|scope| scope.get(&ident.name))
                 {
-                    if let Some(ident_i) = self.function_stack.iter().position(|c_name| {
-                        let cf = self.functions.get(c_name).unwrap();
-                        cf.lines.iter().any(|line| {
-                            line.var_name.as_ref().map_or(false, |vn| vn == &def.c_name)
+                    if let Some(ident_i) = self
+                        .function_stack
+                        .iter()
+                        .position(|c_name| {
+                            let cf = self.functions.get(c_name).unwrap();
+                            cf.lines.iter().any(|line| {
+                                line.var_name.as_ref().map_or(false, |vn| vn == &def.c_name)
+                            })
                         })
-                    }) {
+                        .filter(|&i| self.function_stack.len() - i > 1)
+                    {
                         // Captures
                         let curr_stack_i = self.function_stack.len() - 1;
                         let (result, _) = (ident_i..self.function_stack.len()).fold(
@@ -605,6 +610,11 @@ impl<'a> Transpilation<'a> {
                             })
                         })
                     }
+                } else if let Some(&(_, c_name)) = BUILTIN_VALUES
+                    .iter()
+                    .find(|(noot_name, _)| noot_name == &ident.name)
+                {
+                    self.map_c_function(|cf| cf.push_expr(c_name.into()))
                 } else {
                     self.error(UnknownDef(ident.name.clone()).span(ident.span))
                 }

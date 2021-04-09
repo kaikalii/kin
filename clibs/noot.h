@@ -121,29 +121,43 @@ NootValue noot_call(NootValue val, int count, NootValue* args) {
     }
 }
 
+NootValue noot_list_get(NootList list, int i) {
+    if (i < 0 || i >= list.len) return NOOT_NIL;
+    NootListEntry** buffer = list.shared->buffer;
+    NootListEntry* entry = buffer[i];
+    while (entry->id > list.id) entry = entry->next;
+    return entry->val;
+}
+
 NootValue noot_print(int count, NootValue* args) {
-    for (int i = 0; i < count; i++) {
-        if (i > 0)
-            printf("\t");
-        NootValue val = args[i];
-        switch (val.type) {
-        case Nil:
-            printf("nil");
-            break;
-        case Bool:
-            if (val.data.Bool) printf("true");
-            else printf("false");
-            break;
-        case Int:
-            printf("%d", val.data.Int);
-            break;
-        case Real:
-            printf("%f", val.data.Real);
-            break;
-        case String:
-            printf("%s", val.data.String.s);
-            break;
+    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
+    switch (val.type) {
+    case Nil:
+        printf("nil");
+        break;
+    case Bool:
+        if (val.data.Bool) printf("true");
+        else printf("false");
+        break;
+    case Int:
+        printf("%d", val.data.Int);
+        break;
+    case Real:
+        printf("%f", val.data.Real);
+        break;
+    case String:
+        printf("%s", val.data.String.s);
+        break;
+    case List:;
+        NootList list = val.data.List;
+        printf("{");
+        for (int i = 0; i < list.len; i++) {
+            if (i > 0) printf(", ");
+            NootValue item = noot_list_get(list, i);
+            noot_print(1, &item);
         }
+        printf("}");
+        break;
     }
     return NOOT_NIL;
 }
@@ -394,14 +408,6 @@ NootList noot_list_push(NootList old, NootValue val) {
         .shared = shared,
     };
     return list;
-}
-
-NootValue noot_list_get(NootList list, int i) {
-    if (i < 0 || i >= list.len) return NOOT_NIL;
-    NootListEntry** buffer = list.shared->buffer;
-    NootListEntry* entry = buffer[i];
-    while (entry->id > list.id) entry = entry->next;
-    return entry->val;
 }
 
 NootValue noot_list_last(NootList list) {
