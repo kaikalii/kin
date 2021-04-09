@@ -1,3 +1,4 @@
-- Implement lists
+- Add push_expr helper function to Transpilation
+- Fill in null arguments with nil
 - Implement tables
 - Add iteration

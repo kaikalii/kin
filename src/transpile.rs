@@ -57,7 +57,7 @@ macro_rules! builtin_functions {
     }
 }
 
-const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!("print", "println");
+const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!("print", "println", "len");
 const BUILTIN_VALUES: &[(&str, &str)] = &[("list", "NOOT_EMPTY_LIST")];
 
 #[derive(Clone)]
@@ -428,7 +428,6 @@ impl<'a> Transpilation<'a> {
             (result, stack)
         }
     }
-
     fn node(self, node: Node<'a>, stack: TranspileStack) -> Self {
         match node {
             Node::Term(term) => self.term(term, stack),
@@ -458,7 +457,7 @@ impl<'a> Transpilation<'a> {
                 let result = result.node(*expr.right, stack);
                 let (result, right) = result.pop_expr();
                 return result.map_c_function(|cf| {
-                    cf.with_line(Some(temp_name.clone()), right)
+                    cf.with_raw_line(format!("{} = {};", temp_name, right))
                         .deindent()
                         .with_raw_line("}".into())
                         .push_expr(temp_name)

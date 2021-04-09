@@ -451,4 +451,12 @@ NootValue noot_get(NootValue con, NootValue key) {
     }
 }
 
+NootValue noot_len(int count, NootValue* args) {
+    switch (args[0].type) {
+    case String: return new_int(args[0].data.String.len);
+    case List: return new_int(args[0].data.List.len);
+    default: return NOOT_NIL;
+    }
+}
+
 #endif
