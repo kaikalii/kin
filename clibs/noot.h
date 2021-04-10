@@ -169,6 +169,21 @@ NootValue noot_println(uint8_t count, NootValue* args) {
     return res;
 }
 
+NootValue noot_list(uint8_t count, NootValue* values) {
+    NootValue val = NOOT_EMPTY_LIST;
+    val.data.List.shared = (NootListShared*)tgc_calloc(&noot_gc, 1, sizeof(NootListShared));
+    val.data.List.shared->buffer = (NootListEntry**)tgc_calloc(&noot_gc, count, count * sizeof(NootListEntry*));
+    NootListShared* shared = val.data.List.shared;
+    shared->capacity = count;
+    val.data.List.len = count;
+    NootListEntry** buffer = shared->buffer;
+    for (uint8_t i = 0; i < count; i++) {
+        buffer[i] = (NootListEntry*)tgc_calloc(&noot_gc, 1, sizeof(NootListEntry));
+        buffer[i]->val = values[i];
+    }
+    return val;
+}
+
 NootValue noot_add(NootValue a, NootValue b) {
     switch (a.type) {
     case Int:
@@ -456,19 +471,16 @@ NootList noot_list_pop(NootList old, NootValue* popped) {
     return list;
 }
 
-NootValue noot_insert(NootValue con, NootValue* key, NootValue val) {
+NootValue noot_insert(NootValue con, NootValue key, NootValue val) {
     switch (con.type) {
-    case List:
-        if (key) {
-            int index;
-            switch (key->type) {
-            case Int: index = key->data.Int; break;
-            case Real: index = key->data.Real; break;
-            default: break; // panic
-            }
-            return new_list(noot_list_replace(con.data.List, index, val));
+    case List:;
+        int index;
+        switch (key.type) {
+        case Int: index = key.data.Int; break;
+        case Real: index = key.data.Real; break;
+        default: break; // panic
         }
-        else return new_list(noot_list_push(con.data.List, val));
+        return new_list(noot_list_replace(con.data.List, index, val));
     default: return NOOT_NIL;
     }
 }

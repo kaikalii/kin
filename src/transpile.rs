@@ -55,8 +55,8 @@ macro_rules! builtin_functions {
     }
 }
 
-const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!("print", "println", "len");
-const BUILTIN_VALUES: &[(&str, &str)] = &[("list", "NOOT_EMPTY_LIST")];
+const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!("print", "println", "len", "list");
+const BUILTIN_VALUES: &[(&str, &str)] = &[];
 
 static RESERVED_NAMES: &[&str] = &[
     // C keywords
@@ -567,14 +567,12 @@ impl<'a> Transpilation<'a> {
             expr.insertions
                 .into_iter()
                 .fold((result, inner), |(result, inner), ins| {
-                    let (result, key) = if let Some(key) = ins.key {
-                        let (result, key) = result.node(key, stack.clone()).pop_expr();
-                        let key_name = result.c_name_for("key", false);
-                        let result =
-                            result.map_c_function(|cf| cf.with_line(Some(key_name.clone()), key));
-                        (result, format!("&{}", key_name))
-                    } else {
-                        (result, "NULL".into())
+                    let (result, key) = match ins.key {
+                        Access::Index(term) => result.term(term, stack.clone()).pop_expr(),
+                        Access::Field(ident) => (
+                            result,
+                            format!("new_string({:?}, {})", ident.name, ident.name.len()),
+                        ),
                     };
                     let (result, val) = result.node(ins.val, stack.clone()).pop_expr();
                     (result, format!("noot_insert({}, {}, {})", inner, key, val))

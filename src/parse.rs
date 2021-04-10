@@ -56,7 +56,6 @@ impl<'a> ParseState<'a> {
         }
         Ok(items)
     }
-
     fn item(&self, pair: Pair<'a, Rule>) -> ParseResult<Item<'a>> {
         debug_pair!(pair);
         let pair = only(pair);
@@ -66,20 +65,17 @@ impl<'a> ParseState<'a> {
             rule => unreachable!("{:?}", rule),
         })
     }
-
     fn ident(&self, pair: Pair<'a, Rule>) -> Ident<'a> {
         Ident {
             name: pair.as_str().into(),
             span: pair.as_span(),
         }
     }
-
     fn param(&self, pair: Pair<'a, Rule>) -> Param<'a> {
         let mut pairs = pair.into_inner();
         let ident = self.ident(pairs.next().unwrap());
         Param { ident }
     }
-
     fn def(&self, pair: Pair<'a, Rule>) -> ParseResult<Def<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
@@ -104,7 +100,6 @@ impl<'a> ParseState<'a> {
             items,
         })
     }
-
     fn expr(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let pair = only(pair);
@@ -113,7 +108,6 @@ impl<'a> ParseState<'a> {
             rule => unreachable!("{:?}", rule),
         })
     }
-
     fn expr_or(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
@@ -131,7 +125,6 @@ impl<'a> ParseState<'a> {
         }
         Ok(left)
     }
-
     fn expr_and(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
@@ -149,7 +142,6 @@ impl<'a> ParseState<'a> {
         }
         Ok(left)
     }
-
     fn expr_cmp(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
@@ -172,7 +164,6 @@ impl<'a> ParseState<'a> {
         }
         Ok(left)
     }
-
     fn expr_as(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
@@ -191,7 +182,6 @@ impl<'a> ParseState<'a> {
         }
         Ok(left)
     }
-
     fn expr_mdr(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
@@ -211,7 +201,6 @@ impl<'a> ParseState<'a> {
         }
         Ok(left)
     }
-
     fn expr_not(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
@@ -233,7 +222,6 @@ impl<'a> ParseState<'a> {
             inner
         })
     }
-
     fn expr_call(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let pairs = pair.into_inner();
@@ -271,7 +259,6 @@ impl<'a> ParseState<'a> {
             Node::Call(call)
         })
     }
-
     fn expr_insert(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
@@ -281,14 +268,8 @@ impl<'a> ParseState<'a> {
             match pair.as_rule() {
                 Rule::insertion => {
                     let mut pairs = pair.into_inner();
-                    let first = self.expr_get(pairs.next().unwrap())?;
-                    let (key, val) = if let Some(val) =
-                        pairs.next().map(|expr| self.expr_get(expr)).transpose()?
-                    {
-                        (Some(first), val)
-                    } else {
-                        (None, first)
-                    };
+                    let key = self.access(pairs.next().unwrap())?;
+                    let val = self.expr_get(pairs.next().unwrap())?;
                     insertions.push(Insertion { key, val });
                 }
                 rule => unreachable!("{:?}", rule),
@@ -303,17 +284,12 @@ impl<'a> ParseState<'a> {
             })
         })
     }
-
     fn expr_get(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
         let mut node = Node::Term(self.term(pairs.next().unwrap())?);
         for pair in pairs {
-            let access = match pair.as_rule() {
-                Rule::ident => Access::Field(self.ident(pair)),
-                Rule::term => Access::Index(self.term(pair)?),
-                rule => unreachable!("{:?}", rule),
-            };
+            let access = self.access(pair)?;
             node = Node::Get(GetExpr {
                 inner: node.into(),
                 access,
@@ -321,7 +297,15 @@ impl<'a> ParseState<'a> {
         }
         Ok(node)
     }
-
+    fn access(&self, pair: Pair<'a, Rule>) -> ParseResult<Access<'a>> {
+        debug_pair!(pair);
+        let pair = only(pair);
+        Ok(match pair.as_rule() {
+            Rule::ident => Access::Field(self.ident(pair)),
+            Rule::term => Access::Index(self.term(pair)?),
+            rule => unreachable!("{:?}", rule),
+        })
+    }
     fn term(&self, pair: Pair<'a, Rule>) -> ParseResult<Term<'a>> {
         debug_pair!(pair);
         let pair = only(pair);
@@ -377,7 +361,6 @@ impl<'a> ParseState<'a> {
             rule => unreachable!("{:?}", rule),
         })
     }
-
     fn string_literal(&self, pair: Pair<'a, Rule>) -> String {
         debug_pair!(pair);
         let mut s = String::new();

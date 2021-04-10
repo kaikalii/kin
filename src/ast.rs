@@ -273,7 +273,7 @@ impl<'a> fmt::Display for CallExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Insertion<'a> {
-    pub key: Option<Node<'a>>,
+    pub key: Access<'a>,
     pub val: Node<'a>,
 }
 
@@ -287,27 +287,18 @@ impl<'a> fmt::Display for InsertExpr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.inner)?;
         match self.insertions.len() {
-            0 => {}
+            0 => Ok(()),
             1 => {
-                if let Some(key) = &self.insertions[0].key {
-                    write!(f, " {}", key)?;
-                }
-                write!(f, ":{}", self.insertions[0].val)?;
+                write!(f, "{}:{}", self.insertions[0].key, self.insertions[0].val)
             }
             _ => {
                 writeln!(f)?;
                 for ins in &self.insertions {
-                    write!(f, "    ")?;
-                    if let Some(key) = &ins.key {
-                        write!(f, "{}", key)?;
-                    }
-                    write!(f, ":{}", ins.val)?;
-                    writeln!(f)?;
+                    write!(f, "    {}:{}", ins.key, ins.val)?;
                 }
-                write!(f, "end")?;
+                write!(f, "end")
             }
         }
-        Ok(())
     }
 }
 
@@ -315,6 +306,15 @@ impl<'a> fmt::Display for InsertExpr<'a> {
 pub enum Access<'a> {
     Index(Term<'a>),
     Field(Ident<'a>),
+}
+
+impl<'a> fmt::Display for Access<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Access::Index(term) => write!(f, "'{}", term),
+            Access::Field(ident) => write!(f, ".{}", ident),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
