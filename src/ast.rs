@@ -130,14 +130,16 @@ pub struct BinExpr<'a> {
     pub left: Box<Node<'a>>,
     pub right: Box<Node<'a>>,
     pub op: BinOp,
+    pub span: Span<'a>,
 }
 
 impl<'a> BinExpr<'a> {
-    pub fn new(left: Node<'a>, right: Node<'a>, op: BinOp) -> Self {
+    pub fn new(left: Node<'a>, right: Node<'a>, op: BinOp, span: Span<'a>) -> Self {
         BinExpr {
             left: left.into(),
             right: right.into(),
             op,
+            span,
         }
     }
 }

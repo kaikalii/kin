@@ -16,11 +16,9 @@ use crate::{ast::*, parse::Rule};
 
 #[derive(Debug, thiserror::Error)]
 pub enum TranspileErrorKind {
-    #[error("Unknown definition {}", _0)]
+    #[error("Unknown definition {0}")]
     UnknownDef(String),
 }
-
-use TranspileErrorKind::*;
 
 impl TranspileErrorKind {
     pub fn span(self, span: Span) -> TranspileError {
@@ -675,7 +673,7 @@ impl<'a> Transpilation<'a> {
                 {
                     self.push_expr(c_name.into())
                 } else {
-                    self.error(UnknownDef(ident.name.clone()).span(ident.span))
+                    self.error(TranspileErrorKind::UnknownDef(ident.name.clone()).span(ident.span))
                 }
             }
         }
