@@ -312,7 +312,7 @@ impl<'a> fmt::Display for InsertExpr<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Get<'a> {
+pub enum Access<'a> {
     Index(Term<'a>),
     Field(Ident<'a>),
 }
@@ -320,15 +320,15 @@ pub enum Get<'a> {
 #[derive(Debug, Clone)]
 pub struct GetExpr<'a> {
     pub inner: Box<Node<'a>>,
-    pub get: Get<'a>,
+    pub access: Access<'a>,
 }
 
 impl<'a> fmt::Display for GetExpr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.inner)?;
-        match &self.get {
-            Get::Index(term) => write!(f, "'{}", term)?,
-            Get::Field(ident) => write!(f, ".{}", ident.name)?,
+        match &self.access {
+            Access::Index(term) => write!(f, "'{}", term)?,
+            Access::Field(ident) => write!(f, ".{}", ident.name)?,
         }
         Ok(())
     }

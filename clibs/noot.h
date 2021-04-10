@@ -434,7 +434,6 @@ NootList noot_list_replace(NootList old, int index, NootValue val) {
         .shared = shared,
     };
     return list;
-
 }
 
 NootValue noot_list_last(NootList list) {

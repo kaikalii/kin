@@ -309,14 +309,14 @@ impl<'a> ParseState<'a> {
         let mut pairs = pair.into_inner();
         let mut node = Node::Term(self.term(pairs.next().unwrap())?);
         for pair in pairs {
-            let get = match pair.as_rule() {
-                Rule::ident => Get::Field(self.ident(pair)),
-                Rule::term => Get::Index(self.term(pair)?),
+            let access = match pair.as_rule() {
+                Rule::ident => Access::Field(self.ident(pair)),
+                Rule::term => Access::Index(self.term(pair)?),
                 rule => unreachable!("{:?}", rule),
             };
             node = Node::Get(GetExpr {
                 inner: node.into(),
-                get,
+                access,
             })
         }
         Ok(node)

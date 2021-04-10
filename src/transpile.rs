@@ -583,9 +583,9 @@ impl<'a> Transpilation<'a> {
     }
     fn get_expr(self, expr: GetExpr<'a>, stack: TranspileStack) -> Self {
         let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
-        let (result, index) = match expr.get {
-            Get::Index(term) => result.term(term, stack).pop_expr(),
-            Get::Field(ident) => (
+        let (result, index) = match expr.access {
+            Access::Index(term) => result.term(term, stack).pop_expr(),
+            Access::Field(ident) => (
                 result,
                 format!("new_string({:?}, {})", ident.name, ident.name.len()),
             ),
