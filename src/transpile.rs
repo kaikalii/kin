@@ -569,13 +569,13 @@ impl<'a> Transpilation<'a> {
             expr.insertions
                 .into_iter()
                 .fold((result, inner), |(result, inner), ins| {
-                    let (result, key) = result.node(ins.key, stack.clone()).pop_expr();
-                    let (result, val) = if let Some(val) = ins.val {
-                        let (result, val) = result.node(val, stack.clone()).pop_expr();
-                        (result, format!("&{}", val))
+                    let (result, key) = if let Some(key) = ins.key {
+                        let (result, key) = result.node(key, stack.clone()).pop_expr();
+                        (result, format!("&{}", key))
                     } else {
                         (result, "NULL".into())
                     };
+                    let (result, val) = result.node(ins.val, stack.clone()).pop_expr();
                     (result, format!("noot_insert({}, {}, {})", inner, key, val))
                 });
         result.push_expr(expr)

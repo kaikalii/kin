@@ -263,8 +263,12 @@ fn parse_expr_insert(pair: Pair<Rule>) -> ParseResult<Node> {
         match pair.as_rule() {
             Rule::insertion => {
                 let mut pairs = pair.into_inner();
-                let key = parse_expr_get(pairs.next().unwrap())?;
-                let val = pairs.next().map(parse_expr_get).transpose()?;
+                let first = parse_expr_get(pairs.next().unwrap())?;
+                let (key, val) = if let Some(val) = pairs.next().map(parse_expr_get).transpose()? {
+                    (Some(first), val)
+                } else {
+                    (None, first)
+                };
                 insertions.push(Insertion { key, val });
             }
             rule => unreachable!("{:?}", rule),

@@ -1,3 +1,5 @@
-
+- Make insertion expressions recursive
+- Seperate checking from transpilation
+- Add mapping expressions
 - Implement tables
 - Add iteration

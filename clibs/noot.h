@@ -430,11 +430,11 @@ NootList noot_list_pop(NootList old, NootValue* popped) {
     return list;
 }
 
-NootValue noot_insert(NootValue con, NootValue key, NootValue* val) {
+NootValue noot_insert(NootValue con, NootValue* key, NootValue val) {
     switch (con.type) {
     case List:
-        if (val);
-        else return new_list(noot_list_push(con.data.List, key));
+        if (key);
+        else return new_list(noot_list_push(con.data.List, val));
     default: return NOOT_NIL;
     }
 }

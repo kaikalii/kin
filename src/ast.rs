@@ -271,8 +271,8 @@ impl<'a> fmt::Display for CallExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Insertion<'a> {
-    pub key: Node<'a>,
-    pub val: Option<Node<'a>>,
+    pub key: Option<Node<'a>>,
+    pub val: Node<'a>,
 }
 
 #[derive(Debug, Clone)]
@@ -287,18 +287,19 @@ impl<'a> fmt::Display for InsertExpr<'a> {
         match self.insertions.len() {
             0 => {}
             1 => {
-                write!(f, " :{}", self.insertions[0].key)?;
-                if let Some(val) = &self.insertions[0].val {
-                    write!(f, " {}", val)?;
+                if let Some(key) = &self.insertions[0].key {
+                    write!(f, " {}", key)?;
                 }
+                write!(f, ":{}", self.insertions[0].val)?;
             }
             _ => {
                 writeln!(f)?;
                 for ins in &self.insertions {
-                    write!(f, "    :{}", ins.key)?;
-                    if let Some(val) = &ins.val {
-                        write!(f, " {}", val)?;
+                    write!(f, "    ")?;
+                    if let Some(key) = &ins.key {
+                        write!(f, "{}", key)?;
                     }
+                    write!(f, ":{}", ins.val)?;
                     writeln!(f)?;
                 }
                 write!(f, "end")?;
