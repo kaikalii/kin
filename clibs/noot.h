@@ -145,8 +145,9 @@ NootValue noot_print(uint8_t count, NootValue* args) {
     case Real:
         printf("%f", val.data.Real);
         break;
-    case String:
-        printf("%s", val.data.String.s);
+    case String:;
+        size_t len = val.data.String.len;
+        printf("%*.*s", len, len, val.data.String.s);
         break;
     case List:;
         NootList list = val.data.List;
@@ -410,6 +411,32 @@ NootList noot_list_push(NootList old, NootValue val) {
     return list;
 }
 
+NootList noot_list_replace(NootList old, int index, NootValue val) {
+    // Push if index == len
+    if (index == old.len) return noot_list_push(old, val);
+    if (index > old.len); // panic
+    NootListShared* shared = old.shared;
+    // Insert
+    // Increment next id
+    int new_id = ++shared->next_id;
+    // Create the new entry
+    NootListEntry* old_entry = shared->buffer[index];
+    NootListEntry* new_entry = (NootListEntry*)tgc_alloc(&noot_gc, sizeof(NootListEntry));
+    new_entry->id = new_id;
+    new_entry->val = val;
+    new_entry->next = shared->buffer[index];
+    // Insert the new entry
+    shared->buffer[index] = new_entry;
+    // Create new list
+    NootList list = {
+        .id = new_id,
+        .len = old.len,
+        .shared = shared,
+    };
+    return list;
+
+}
+
 NootValue noot_list_last(NootList list) {
     return noot_list_get(list, list.len - 1);
 }
@@ -433,7 +460,15 @@ NootList noot_list_pop(NootList old, NootValue* popped) {
 NootValue noot_insert(NootValue con, NootValue* key, NootValue val) {
     switch (con.type) {
     case List:
-        if (key);
+        if (key) {
+            int index;
+            switch (key->type) {
+            case Int: index = key->data.Int; break;
+            case Real: index = key->data.Real; break;
+            default: break; // panic
+            }
+            return new_list(noot_list_replace(con.data.List, index, val));
+        }
         else return new_list(noot_list_push(con.data.List, val));
     default: return NOOT_NIL;
     }

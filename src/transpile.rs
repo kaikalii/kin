@@ -571,7 +571,10 @@ impl<'a> Transpilation<'a> {
                 .fold((result, inner), |(result, inner), ins| {
                     let (result, key) = if let Some(key) = ins.key {
                         let (result, key) = result.node(key, stack.clone()).pop_expr();
-                        (result, format!("&{}", key))
+                        let key_name = result.c_name_for("key", false);
+                        let result =
+                            result.map_c_function(|cf| cf.with_line(Some(key_name.clone()), key));
+                        (result, format!("&{}", key_name))
                     } else {
                         (result, "NULL".into())
                     };
