@@ -54,7 +54,7 @@ typedef struct NootList {
 } NootList;
 
 typedef union NootData {
-    byte Bool;
+    bool Bool;
     unsigned long Nat;
     long Int;
     double Real;
@@ -82,7 +82,7 @@ const NootValue NOOT_EMPTY_LIST = {
     .data = {.List = {.id = 0, .len = 0, .shared = NULL }},
 };
 
-NootValue new_bool(byte b) {
+NootValue new_bool(bool b) {
     NootValue val = { .type = Bool, .data = {.Bool = b} };
     return val;
 }
@@ -182,7 +182,7 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         printf("}");
         break;
     }
-    return NOOT_NIL;
+    return new_bool(true);
 }
 
 NootValue noot_println(uint8_t count, NootValue* args) {
