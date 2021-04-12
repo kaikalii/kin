@@ -3,6 +3,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "utf8.h"
 #include "tgc.h"
 
@@ -24,6 +25,7 @@ typedef enum NootType {
     List,
     Table,
     Function,
+    Closure,
     Error,
 } NootType;
 
@@ -32,6 +34,12 @@ typedef struct NootValue NootValue;
 typedef struct NootListEntry NootListEntry;
 
 typedef NootValue(*NootFn)(uint8_t, NootValue* args);
+typedef NootValue(*NootClosureFn)(uint8_t, NootValue* args, NootValue* captures);
+
+typedef struct NootClosure {
+    NootValue* captures;
+    NootClosureFn f;
+} NootClosure;
 
 typedef struct NootListShared {
     size_t capacity;
@@ -52,6 +60,7 @@ typedef union NootData {
     double Real;
     NootString String;
     NootFn Function;
+    NootClosure Closure;
     NootList List;
     struct NootValue* Error;
 } NootData;
@@ -96,6 +105,17 @@ NootValue new_function(NootFn f) {
     return val;
 }
 
+NootValue new_closure(NootClosureFn f, NootValue* captures) {
+    NootValue val = {
+        .type = Closure,
+        .data = {.Closure = {
+            .f = f,
+            .captures = captures
+        }}
+    };
+    return val;
+}
+
 NootString new_noot_string(byte* s, size_t len) {
     NootString string = {
         .s = s,
@@ -118,6 +138,8 @@ NootValue noot_call(NootValue val, int count, NootValue* args) {
     switch (val.type) {
     case Function:
         return (*val.data.Function)(count, args);
+    case Closure:
+        return (*val.data.Closure.f)(count, args, val.data.Closure.captures);
     }
 }
 
@@ -278,7 +300,7 @@ NootValue noot_rem(NootValue a, NootValue b) {
     }
 }
 
-int noot_eq_impl(NootValue a, NootValue b) {
+bool noot_eq_impl(NootValue a, NootValue b) {
     switch (a.type) {
     case Nil: return b.type == Nil;
     case Bool: return b.type == Bool && a.data.Bool == b.data.Bool;
@@ -304,7 +326,7 @@ int noot_eq_impl(NootValue a, NootValue b) {
     }
 }
 
-int noot_lt_impl(NootValue a, NootValue b) {
+bool noot_lt_impl(NootValue a, NootValue b) {
     switch (a.type) {
     case Nil: return 0;
     case Bool: return b.type == Bool && a.data.Bool < b.data.Bool;
@@ -330,7 +352,7 @@ int noot_lt_impl(NootValue a, NootValue b) {
     }
 }
 
-int noot_gt_impl(NootValue a, NootValue b) {
+bool noot_gt_impl(NootValue a, NootValue b) {
     switch (a.type) {
     case Nil: return 0;
     case Bool: return b.type == Bool && a.data.Bool > b.data.Bool;
@@ -392,7 +414,7 @@ NootValue noot_not(NootValue val) {
     else return new_bool(val.type == Nil);
 }
 
-int noot_is_true(NootValue val) {
+bool noot_is_true(NootValue val) {
     if (val.type == Bool) return val.data.Bool;
     else return val.type != Nil;
 }

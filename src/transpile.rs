@@ -270,13 +270,18 @@ impl<'a> Transpilation<'a> {
 
         // Write function declarations
         for (name, cf) in self.functions.iter().filter(|&(name, _)| name != "main") {
-            writeln!(
-                source,
-                "NootValue {}(uint8_t count, NootValue* args);",
-                name
-            )?;
-            if !cf.captures.is_empty() {
-                writeln!(source, "static NootValue* {}_captures;", name)?;
+            if cf.captures.is_empty() {
+                writeln!(
+                    source,
+                    "NootValue {}(uint8_t count, NootValue* args);",
+                    name
+                )?;
+            } else {
+                writeln!(
+                    source,
+                    "NootValue {}(uint8_t count, NootValue* args, NootValue* captures);",
+                    name
+                )?;
             }
         }
         writeln!(source)?;
@@ -288,10 +293,16 @@ impl<'a> Transpilation<'a> {
             if main {
                 writeln!(source, "int main(int argc, char** argv) {{")?;
                 writeln!(source, "    tgc_start(&noot_gc, &argc);")?;
-            } else {
+            } else if cf.captures.is_empty() {
                 writeln!(
                     source,
                     "NootValue {}(uint8_t count, NootValue* args) {{",
+                    name
+                )?;
+            } else {
+                writeln!(
+                    source,
+                    "NootValue {}(uint8_t count, NootValue* args, NootValue* captures) {{",
                     name
                 )?;
             }
@@ -599,9 +610,13 @@ impl<'a> Transpilation<'a> {
             Term::String(s) => self.push_expr(format!("new_string({:?}, {})", s, s.len())),
             Term::Expr(items) => self.items(items, stack),
             Term::Closure(closure) => {
-                let c_name = self.c_name_for("closure", true);
+                let c_name = self.c_name_for("anon", true);
                 let result = self.function(c_name.clone(), closure.params, closure.body, stack);
-                result.push_expr(format!("new_function(&{})", c_name))
+                if result.functions.get(&c_name).unwrap().captures.is_empty() {
+                    result.push_expr(format!("new_function(&{})", c_name))
+                } else {
+                    result.push_expr(format!("{}_closure", c_name))
+                }
             }
             Term::Ident(ident) => {
                 if let Some(def) = stack
@@ -627,16 +642,13 @@ impl<'a> Transpilation<'a> {
                             (self, None),
                             |(result, mut prev), stack_i| {
                                 let last = curr_stack_i == stack_i;
-                                let function_name =
-                                    result.function_stack.get(stack_i).unwrap().clone();
-                                let capturer_name = result.function_stack.get(stack_i + 1).cloned();
+                                // let function_name =
+                                //     result.function_stack.get(stack_i).unwrap().clone();
+                                // let capturer_name = result.function_stack.get(stack_i + 1).cloned();
                                 let result = if last {
                                     result.map_c_function(|cf| {
                                         let cap_i = cf.capture_index_of(&def.c_name);
-                                        cf.push_expr(format!(
-                                            "{}_captures[{}]",
-                                            function_name, cap_i
-                                        ))
+                                        cf.push_expr(format!("captures[{}]", cap_i))
                                     })
                                 } else {
                                     result.map_c_function_at(stack_i + 1, |cf| {
@@ -645,11 +657,7 @@ impl<'a> Transpilation<'a> {
                                             prev.clone().unwrap_or_else(|| def.c_name.clone()),
                                         );
                                         let cap_i = cf.capture_index_of(&def.c_name);
-                                        prev = Some(format!(
-                                            "{}_captures[{}]",
-                                            capturer_name.unwrap(),
-                                            cap_i
-                                        ));
+                                        prev = Some(format!("captures[{}]", cap_i));
                                         cf
                                     })
                                 };
@@ -659,8 +667,16 @@ impl<'a> Transpilation<'a> {
                         result
                     } else {
                         // Non-captures
+                        let is_closure = self
+                            .functions
+                            .get(&def.c_name)
+                            .map_or(false, |cf| !cf.captures.is_empty());
                         self.push_expr(if def.is_function {
-                            format!("new_function(&{})", def.c_name)
+                            if is_closure {
+                                format!("{}_closure", def.c_name)
+                            } else {
+                                format!("new_function(&{})", def.c_name)
+                            }
                         } else {
                             def.c_name.clone()
                         })
@@ -713,9 +729,10 @@ impl<'a> Transpilation<'a> {
             result
         } else {
             let captures_name = format!("{}_captures", c_name);
+            let closure_name = format!("{}_closure", c_name);
             let result = result.map_c_function(|cf| {
                 cf.with_raw_line(format!(
-                    "{} = (NootValue*)tgc_alloc(&noot_gc, {} * sizeof(NootValue));",
+                    "NootValue* {} = (NootValue*)tgc_alloc(&noot_gc, {} * sizeof(NootValue));",
                     captures_name,
                     captures.len()
                 ))
@@ -730,6 +747,12 @@ impl<'a> Transpilation<'a> {
                             captures_name, i, cap.capture_name
                         ))
                     })
+                })
+                .map_c_function(|cf| {
+                    cf.with_line(
+                        Some(closure_name.clone()),
+                        format!("new_closure(&{}, {})", c_name, captures_name),
+                    )
                 })
         }
     }
