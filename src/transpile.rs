@@ -687,7 +687,7 @@ impl<'a> Transpilation<'a> {
         let result = result.map_c_function(|cf| {
             (0..params.len()).fold(cf, |cf, i| {
                 cf.with_line(
-                    Some(format!("arg{}", i)),
+                    Some(format!("{}_arg{}", c_name, i)),
                     format!("{i} < count ? args[{i}] : NOOT_NIL", i = i),
                 )
             })
@@ -699,7 +699,7 @@ impl<'a> Transpilation<'a> {
                 stack.with_noot_def(
                     param.ident.name,
                     NootDef {
-                        c_name: format!("arg{}", i),
+                        c_name: format!("{}_arg{}", c_name, i),
                         is_function: false,
                     },
                 )
