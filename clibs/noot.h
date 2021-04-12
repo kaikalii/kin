@@ -35,7 +35,7 @@ typedef NootValue(*NootFn)(uint8_t, NootValue* args);
 
 typedef struct NootListShared {
     size_t capacity;
-    NootListEntry** buffer;
+    NootListEntry* buffer;
     int next_id;
 } NootListShared;
 
@@ -123,10 +123,10 @@ NootValue noot_call(NootValue val, int count, NootValue* args) {
 
 NootValue noot_list_get(NootList list, int i) {
     if (i < 0 || i >= list.len) return NOOT_NIL;
-    NootListEntry** buffer = list.shared->buffer;
-    NootListEntry* entry = buffer[i];
-    while (entry->id > list.id) entry = entry->next;
-    return entry->val;
+    NootListEntry* buffer = list.shared->buffer;
+    NootListEntry entry = buffer[i];
+    while (entry.id > list.id) entry = *entry.next;
+    return entry.val;
 }
 
 NootValue noot_print(uint8_t count, NootValue* args) {
@@ -172,14 +172,13 @@ NootValue noot_println(uint8_t count, NootValue* args) {
 NootValue noot_list(uint8_t count, NootValue* values) {
     NootValue val = NOOT_EMPTY_LIST;
     val.data.List.shared = (NootListShared*)tgc_calloc(&noot_gc, 1, sizeof(NootListShared));
-    val.data.List.shared->buffer = (NootListEntry**)tgc_calloc(&noot_gc, count, count * sizeof(NootListEntry*));
+    val.data.List.shared->buffer = (NootListEntry*)tgc_calloc(&noot_gc, count, count * sizeof(NootListEntry));
     NootListShared* shared = val.data.List.shared;
     shared->capacity = count;
     val.data.List.len = count;
-    NootListEntry** buffer = shared->buffer;
+    NootListEntry* buffer = shared->buffer;
     for (uint8_t i = 0; i < count; i++) {
-        buffer[i] = (NootListEntry*)tgc_calloc(&noot_gc, 1, sizeof(NootListEntry));
-        buffer[i]->val = values[i];
+        buffer[i].val = values[i];
     }
     return val;
 }
@@ -404,19 +403,21 @@ NootList noot_list_push(NootList old, NootValue val) {
     // Increase capacity if necessary
     if (old.len == shared->capacity) {
         size_t new_capacity = shared->capacity == 0 ? 1 : shared->capacity * 2;
-        shared->buffer = (NootListEntry**)tgc_realloc(&noot_gc, shared->buffer, new_capacity * sizeof(NootListEntry*));
+        shared->buffer = (NootListEntry*)tgc_realloc(&noot_gc, shared->buffer, new_capacity * sizeof(NootListEntry));
         shared->capacity = new_capacity;
     }
     // Increment next id
     int new_id = ++shared->next_id;
     // Create the new entry
-    NootListEntry* old_entry = shared->buffer[old.len];
-    NootListEntry* new_entry = (NootListEntry*)tgc_alloc(&noot_gc, sizeof(NootListEntry));
-    new_entry->id = new_id;
-    new_entry->val = val;
-    new_entry->next = shared->buffer[old.len];
-    // Insert the new entry
-    shared->buffer[old.len] = new_entry;
+    size_t i = old.len;
+    NootListEntry* buffer = shared->buffer;
+    // Keep track of old entry
+    NootListEntry old_entry = buffer[i];
+    // Replace old old entry fields with new entry fields
+    buffer[i].id = new_id;
+    buffer[i].val = val;
+    buffer[i].next = (NootListEntry*)tgc_alloc(&noot_gc, sizeof(NootListEntry));
+    *buffer[i].next = old_entry;
     // Create new list
     NootList list = {
         .id = new_id,
@@ -426,7 +427,7 @@ NootList noot_list_push(NootList old, NootValue val) {
     return list;
 }
 
-NootList noot_list_replace(NootList old, int index, NootValue val) {
+NootList noot_list_replace(NootList old, size_t index, NootValue val) {
     // Push if index == len
     if (index == old.len) return noot_list_push(old, val);
     if (index > old.len); // panic
@@ -435,13 +436,15 @@ NootList noot_list_replace(NootList old, int index, NootValue val) {
     // Increment next id
     int new_id = ++shared->next_id;
     // Create the new entry
-    NootListEntry* old_entry = shared->buffer[index];
-    NootListEntry* new_entry = (NootListEntry*)tgc_alloc(&noot_gc, sizeof(NootListEntry));
-    new_entry->id = new_id;
-    new_entry->val = val;
-    new_entry->next = shared->buffer[index];
-    // Insert the new entry
-    shared->buffer[index] = new_entry;
+    size_t i = index;
+    NootListEntry* buffer = shared->buffer;
+    // Keep track of old entry
+    NootListEntry old_entry = buffer[i];
+    // Replace old old entry fields with new entry fields
+    buffer[i].id = new_id;
+    buffer[i].val = val;
+    buffer[i].next = (NootListEntry*)tgc_alloc(&noot_gc, sizeof(NootListEntry));
+    *buffer[i].next = old_entry;
     // Create new list
     NootList list = {
         .id = new_id,
