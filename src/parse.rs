@@ -248,16 +248,17 @@ impl<'a> ParseState<'a> {
             }
         }
         let mut calls = calls.into_iter();
-        let mut call = calls.next().unwrap();
-        for mut chained_call in calls {
-            chained_call.args.insert(0, Node::Call(call));
-            call = chained_call;
-        }
-        Ok(if call.args.is_empty() {
-            *call.expr
+        let first_call = calls.next().unwrap();
+        let mut call_node = if first_call.args.is_empty() {
+            *first_call.expr
         } else {
-            Node::Call(call)
-        })
+            Node::Call(first_call)
+        };
+        for mut chained_call in calls {
+            chained_call.args.insert(0, call_node);
+            call_node = Node::Call(chained_call);
+        }
+        Ok(call_node)
     }
     fn expr_insert(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
