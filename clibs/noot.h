@@ -323,6 +323,7 @@ bool noot_eq_impl(NootValue a, NootValue b) {
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) == 0;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     case Function: return b.type == Function && a.data.Function == b.data.Function;
+    case Closure: return b.type == Closure && a.data.Closure.f == b.data.Closure.f;
     }
 }
 
@@ -349,6 +350,7 @@ bool noot_lt_impl(NootValue a, NootValue b) {
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) < 0;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     case Function: return b.type == Function && a.data.Function < b.data.Function;
+    case Closure: return b.type == Closure && a.data.Closure.f < b.data.Closure.f;
     }
 }
 
@@ -375,6 +377,7 @@ bool noot_gt_impl(NootValue a, NootValue b) {
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) > 0;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     case Function: return b.type == Function && a.data.Function > b.data.Function;
+    case Closure: return b.type == Closure && a.data.Closure.f > b.data.Closure.f;
     }
 }
 
@@ -527,6 +530,41 @@ NootValue noot_len(uint8_t count, NootValue* args) {
     case String: return new_int(args[0].data.String.len);
     case List: return new_int(args[0].data.List.len);
     default: return NOOT_NIL;
+    }
+}
+
+typedef struct HashState {
+    uint64_t hash;
+    size_t i;
+} HashState;
+
+void bad_hash(HashState* state, byte* bytes, size_t count) {
+    for (size_t i = 0; i < count; i++, state->i++) {
+        state->hash ^= bytes[i] << (state->i % 57);
+    }
+}
+
+const HashState DEFAULT_HASH_STATE = {
+    .hash = 0,
+    .i = 0,
+};
+
+void noot_bad_hash(HashState* state, NootValue val) {
+    bad_hash(state, (byte*)&val.type, sizeof(NootType));
+    switch (val.type) {
+    case Nil: break;
+    case Bool: bad_hash(state, (byte*)&val.data.Bool, sizeof(bool)); break;
+    case Int: bad_hash(state, (byte*)&val.data.Int, sizeof(long)); break;
+    case Real: bad_hash(state, (byte*)&val.data.Real, sizeof(double)); break;
+    case String: bad_hash(state, val.data.String.s, val.data.String.len); break;
+    case List:
+        bad_hash(state, (byte*)&val.data.List.len, sizeof(size_t));
+        for (size_t i = 0; i < val.data.List.len; i++)
+            noot_bad_hash(state, noot_list_get(val.data.List, i));
+        break;
+    case Function: bad_hash(state, (byte*)val.data.Function, sizeof(NootFn)); break;
+    case Closure: bad_hash(state, (byte*)val.data.Closure.f, sizeof(NootClosureFn)); break;
+    case Error: noot_bad_hash(state, *val.data.Error); break;
     }
 }
 
