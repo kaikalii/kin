@@ -7,7 +7,7 @@ keyword = { "true" | "false" | "nil" | "is" | "isnt" | "and" | "or" | "not" | "e
 
 // Numbers
 int = @{ ("+" | "-")? ~ ASCII_DIGIT+ }
-real = @{ int ~ ("." ~ ASCII_DIGIT+)? ~ (^"e" ~ int)? }
+real = @{ int ~ ("." ~ ASCII_DIGIT+) ~ (^"e" ~ int)? }
 
 // String literals
 string = ${ "\"" ~ (raw_string | "\\" ~ (predefined | byte | unicode))* ~ "\"" }

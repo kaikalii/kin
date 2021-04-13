@@ -232,8 +232,14 @@ NootValue noot_print(uint8_t count, NootValue* args) {
     case Int:
         printf("%d", val.data.Int);
         break;
-    case Real:
-        printf("%f", val.data.Real);
+    case Real:;
+        byte str[50];
+        sprintf(str, "%f", val.data.Real);
+        int i = strlen(str);
+        if (i == 0) break;
+        i -= 1;
+        while (str[i] == '0' || str[i] == '.') i--;
+        printf("%*.*s", i + 1, i + 1, str);
         break;
     case String:;
         size_t len = val.data.String.len;
