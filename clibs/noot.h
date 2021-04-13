@@ -193,6 +193,14 @@ NootValue new_table(NootTable table) {
     return val;
 }
 
+// Create a new Noot error from a value
+NootValue noot_error(uint8_t count, NootValue* inner) {
+    NootValue val = { .type = Error };
+    val.data.Error = (NootValue*)tgc_alloc(&noot_gc, sizeof(NootValue));
+    *val.data.Error = inner ? *inner : NOOT_NIL;
+    return val;
+}
+
 // Call a Noot function or closure value
 NootValue noot_call(NootValue val, int count, NootValue* args) {
     switch (val.type) {
