@@ -1,3 +1,5 @@
-
+- Add panics and stack traces
+- Add list pattern matching
+- Add variadic parameters
 - Add mapping expressions
 - Add iteration
