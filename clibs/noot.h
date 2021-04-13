@@ -130,25 +130,12 @@ const NootValue NOOT_EMPTY_TABLE = {
 #define new_bool(b) (NootValue) { .type = Bool, .data = { .Bool = b } }
 #define new_int(i) (NootValue) { .type = Int, .data = { .Int = i } }
 #define new_real(i) (NootValue) { .type = Real, .data = { .Real = i } }
-#define new_function(f) (NootValue) { .type = Function, .data = { .Function = f } }
+#define new_function(f) (NootValue) { .type = Function, .data = { Function = f } }
 #define new_closure(f, captures) (NootValue) { .type = Closure, .data = { .Closure = { .f = f, .captures = captures } } }
-#define new_list(list) (NootValue) { .type = List, .data = {.List = list} }
-#define new_table(table) (NootValue) { .type = Table, .data = {.Table = table} }
-
-// Create a new Noot string
-NootString new_noot_string(byte* s, size_t len) {
-    NootString string = {
-        .s = s,
-        .len = len,
-    };
-    return string;
-}
-
-// Create a new Noot string value
-NootValue new_string(byte* s, size_t len) {
-    NootValue val = { .type = String, .data = {.String = new_noot_string(s, len)} };
-    return val;
-}
+#define new_list(list) (NootValue) { .type = List, .data = { .List = list } }
+#define new_table(table) (NootValue) { .type = Table, .data = { .Table = table } }
+#define new_noot_string(s, len) (NootString) { .s = s, .len = len }
+#define new_string(s, len) (NootValue) { .type = String, .data = { .String = new_noot_string(s, len) } }
 
 // Create a new Noot error from a value
 NootValue noot_error(uint8_t count, NootValue* inner) {
