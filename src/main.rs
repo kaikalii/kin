@@ -15,6 +15,8 @@ fn main() {
     // Parse
     match parse::parse(&input) {
         Ok(items) => {
+            #[cfg(feature = "debug")]
+            println!("{:#?}", items);
             // Transpile
             let transpilation = transpile(items);
             if transpilation.errors.is_empty() {

@@ -270,7 +270,7 @@ impl<'a> ParseState<'a> {
                 Rule::insertion => {
                     let mut pairs = pair.into_inner();
                     let key = self.access(pairs.next().unwrap())?;
-                    let val = self.expr_get(pairs.next().unwrap())?;
+                    let val = Node::Term(self.term(pairs.next().unwrap())?);
                     insertions.push(Insertion { key, val });
                 }
                 rule => unreachable!("{:?}", rule),

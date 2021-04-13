@@ -7,7 +7,7 @@ keyword = { "true" | "false" | "nil" | "is" | "isnt" | "and" | "or" | "not" | "e
 
 // Numbers
 int = @{ ("+" | "-")? ~ ASCII_DIGIT+ }
-real = @{ int ~ ("." ~ ASCII_DIGIT*)+ ~ (^"e" ~ int)? }
+real = @{ int ~ ("." ~ ASCII_DIGIT+)? ~ (^"e" ~ int)? }
 
 // String literals
 string = ${ "\"" ~ (raw_string | "\\" ~ (predefined | byte | unicode))* ~ "\"" }
@@ -43,7 +43,7 @@ closure = { param* ~ bar ~ (NEWLINE ~ items ~ "end" | expr)}
 term = { real | int | closure | ident | bool_literal | nil | string | paren_expr }
 access = { "'" ~ term | "." ~ ident }
 expr_get = { term ~ (access ~ !":")* }
-insertion = { access ~ ":" ~ expr_get }
+insertion = { access ~ ":" ~ term }
 expr_insert = { expr_get ~ (insertion+ | NEWLINE ~ (insertion+ ~ NEWLINE)+ ~ "end" )? }
 expr_call_single = { expr_insert+ }
 chain_call = { "," ~ NEWLINE? }
