@@ -28,6 +28,7 @@ fn main() {
                     .arg("clibs/tgc.c")
                     .arg("-o")
                     .arg("test")
+                    .arg("-O3")
                     .spawn()
                     .unwrap()
                     .wait()

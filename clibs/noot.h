@@ -127,44 +127,13 @@ const NootValue NOOT_EMPTY_TABLE = {
     .data = {.Table = {.id = 0, .len = 0, .shared = NULL }},
 };
 
-// Create a new bool Noot value
-NootValue new_bool(bool b) {
-    NootValue val = { .type = Bool, .data = {.Bool = b} };
-    return val;
-}
-
-// Create a new int Noot value
-NootValue new_int(long i) {
-    NootValue val = { .type = Int, .data = {.Int = i} };
-    return val;
-}
-
-// Create a new real Noot value
-NootValue new_real(double i) {
-    NootValue val = { .type = Real, .data = {.Real = i} };
-    return val;
-}
-
-// Create a new Noot function value
-NootValue new_function(NootFn f) {
-    NootValue val = {
-        .type = Function,
-        .data = {.Function = f }
-    };
-    return val;
-}
-
-// Create a new Noot closure value
-NootValue new_closure(NootClosureFn f, NootValue* captures) {
-    NootValue val = {
-        .type = Closure,
-        .data = {.Closure = {
-            .f = f,
-            .captures = captures
-        }}
-    };
-    return val;
-}
+#define new_bool(b) (NootValue) { .type = Bool, .data = { .Bool = b } }
+#define new_int(i) (NootValue) { .type = Int, .data = { .Int = i } }
+#define new_real(i) (NootValue) { .type = Real, .data = { .Real = i } }
+#define new_function(f) (NootValue) { .type = Function, .data = { .Function = f } }
+#define new_closure(f, captures) (NootValue) { .type = Closure, .data = { .Closure = { .f = f, .captures = captures } } }
+#define new_list(list) (NootValue) { .type = List, .data = {.List = list} }
+#define new_table(table) (NootValue) { .type = Table, .data = {.Table = table} }
 
 // Create a new Noot string
 NootString new_noot_string(byte* s, size_t len) {
@@ -178,18 +147,6 @@ NootString new_noot_string(byte* s, size_t len) {
 // Create a new Noot string value
 NootValue new_string(byte* s, size_t len) {
     NootValue val = { .type = String, .data = {.String = new_noot_string(s, len)} };
-    return val;
-}
-
-// Create a new Noot list value from a Noot list
-NootValue new_list(NootList list) {
-    NootValue val = { .type = List, .data = {.List = list} };
-    return val;
-}
-
-// Create a new Noot table value from a Noot table
-NootValue new_table(NootTable table) {
-    NootValue val = { .type = Table, .data = {.Table = table} };
     return val;
 }
 
@@ -526,8 +483,7 @@ NootValue noot_not(NootValue val) {
 }
 
 bool noot_is_true(NootValue val) {
-    if (val.type == Bool) return val.data.Bool;
-    else return val.type != Nil;
+    return (val.type == Bool) * val.data.Bool + (val.type != Bool) * (val.type != Nil);
 }
 
 NootList noot_list_push(NootList old, NootValue val) {
