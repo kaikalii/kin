@@ -235,7 +235,7 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         NootList list = val.data.List;
         printf("[");
         for (int i = 0; i < list.len; i++) {
-            if (i > 0) printf(", ");
+            if (i > 0) printf(" ");
             NootValue item = noot_list_get(list, i);
             noot_print(1, &item);
         }
@@ -252,7 +252,7 @@ NootValue noot_print(uint8_t count, NootValue* args) {
                     NootListEntry* val_entry = &key_entry->vals;
                     while (val_entry) {
                         if (val_entry->id <= table.id) {
-                            if (i > 0) printf(", ");
+                            if (i > 0) printf(" ");
                             noot_print(1, &key_entry->key);
                             printf(":");
                             noot_print(1, &val_entry->val);
@@ -266,6 +266,14 @@ NootValue noot_print(uint8_t count, NootValue* args) {
             }
         }
         printf("}");
+        break;
+    case Function:
+    case Closure:
+        printf("function");
+        break;
+    case Error:
+        printf("Error: ");
+        noot_print(1, val.data.Error);
         break;
     }
     return new_bool(true);
