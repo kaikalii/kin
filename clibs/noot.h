@@ -9,13 +9,16 @@
 
 static tgc_t noot_gc;
 
+// The type of a byte
 typedef unsigned char byte;
 
+// The Noot string representation
 typedef struct NootString {
     byte* s;
     size_t len;
 } NootString;
 
+// Noot types
 typedef enum NootType {
     Nil,
     Bool,
@@ -29,30 +32,37 @@ typedef enum NootType {
     Error,
 } NootType;
 
-typedef struct NootValue NootValue;
+// Foward declarations
 
+typedef struct NootValue NootValue;
 typedef struct NootListEntry NootListEntry;
 
+// The function pointer type for regular Noot functions
 typedef NootValue(*NootFn)(uint8_t, NootValue* args);
+// The function pointer type for Noot closures
 typedef NootValue(*NootClosureFn)(uint8_t, NootValue* args, NootValue* captures);
 
+// A Noot closure
 typedef struct NootClosure {
     NootValue* captures;
     NootClosureFn f;
 } NootClosure;
 
+// The shared part of a Noot List
 typedef struct NootListShared {
     size_t capacity;
     NootListEntry* buffer;
     int next_id;
 } NootListShared;
 
+// A Noot list
 typedef struct NootList {
     int id;
     size_t len;
     NootListShared* shared;
 } NootList;
 
+// The data of a Noot value
 typedef union NootData {
     bool Bool;
     unsigned long Nat;
@@ -65,38 +75,47 @@ typedef union NootData {
     struct NootValue* Error;
 } NootData;
 
+// A noot value with a type and data
 struct NootValue {
     NootType type;
     NootData data;
 };
 
+// The entry of Noot lists and maps
 typedef struct NootListEntry {
     int id;
     NootValue val;
     struct NootListEntry* next;
 } NootListEntry;
 
+// The nil Noot value
 const NootValue NOOT_NIL = { .type = Nil };
+
+// An empty Noot list
 const NootValue NOOT_EMPTY_LIST = {
     .type = List,
     .data = {.List = {.id = 0, .len = 0, .shared = NULL }},
 };
 
+// Create a new bool Noot value
 NootValue new_bool(bool b) {
     NootValue val = { .type = Bool, .data = {.Bool = b} };
     return val;
 }
 
+// Create a new int Noot value
 NootValue new_int(long i) {
     NootValue val = { .type = Int, .data = {.Int = i} };
     return val;
 }
 
+// Create a new real Noot value
 NootValue new_real(double i) {
     NootValue val = { .type = Real, .data = {.Real = i} };
     return val;
 }
 
+// Create a new Noot function value
 NootValue new_function(NootFn f) {
     NootValue val = {
         .type = Function,
@@ -105,6 +124,7 @@ NootValue new_function(NootFn f) {
     return val;
 }
 
+// Create a new Noot closure value
 NootValue new_closure(NootClosureFn f, NootValue* captures) {
     NootValue val = {
         .type = Closure,
@@ -116,6 +136,7 @@ NootValue new_closure(NootClosureFn f, NootValue* captures) {
     return val;
 }
 
+// Create a new Noot string
 NootString new_noot_string(byte* s, size_t len) {
     NootString string = {
         .s = s,
@@ -124,16 +145,19 @@ NootString new_noot_string(byte* s, size_t len) {
     return string;
 }
 
+// Create a new Noot string value
 NootValue new_string(byte* s, size_t len) {
     NootValue val = { .type = String, .data = {.String = new_noot_string(s, len)} };
     return val;
 }
 
+// Create a new Noot list value from a Noot list
 NootValue new_list(NootList list) {
     NootValue val = { .type = List, .data = {.List = list} };
     return val;
 }
 
+// Call a Noot function or closure value
 NootValue noot_call(NootValue val, int count, NootValue* args) {
     switch (val.type) {
     case Function:
