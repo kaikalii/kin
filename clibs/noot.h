@@ -7,6 +7,7 @@
 #include "utf8.h"
 #include "tgc.h"
 
+// The garbage collector
 static tgc_t noot_gc;
 
 // The type of a byte
@@ -36,6 +37,7 @@ typedef enum NootType {
 
 typedef struct NootValue NootValue;
 typedef struct NootListEntry NootListEntry;
+typedef struct NootTableEntry NootTableEntry;
 
 // The function pointer type for regular Noot functions
 typedef NootValue(*NootFn)(uint8_t, NootValue* args);
@@ -55,12 +57,26 @@ typedef struct NootListShared {
     int next_id;
 } NootListShared;
 
+// The shared part of a Noot table
+typedef struct NootTableShared {
+    size_t capacity;
+    NootTableEntry** buffer;
+    int next_id;
+} NootTableShared;
+
 // A Noot list
 typedef struct NootList {
     int id;
     size_t len;
     NootListShared* shared;
 } NootList;
+
+// A Noot table
+typedef struct NootTable {
+    int id;
+    size_t len;
+    NootTableShared* shared;
+} NootTable;
 
 // The data of a Noot value
 typedef union NootData {
@@ -72,6 +88,7 @@ typedef union NootData {
     NootFn Function;
     NootClosure Closure;
     NootList List;
+    NootTable Table;
     struct NootValue* Error;
 } NootData;
 
@@ -81,12 +98,20 @@ struct NootValue {
     NootData data;
 };
 
-// The entry of Noot lists and maps
+// The entry of Noot lists
 typedef struct NootListEntry {
     int id;
     NootValue val;
     struct NootListEntry* next;
 } NootListEntry;
+
+// The entry of Noot tables
+typedef struct NootTableEntry {
+    int id;
+    NootValue key;
+    NootValue val;
+    struct NootTableEntry* next;
+} NootTableEntry;
 
 // The nil Noot value
 const NootValue NOOT_NIL = { .type = Nil };
@@ -197,12 +222,18 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         break;
     case List:;
         NootList list = val.data.List;
-        printf("{");
+        printf("[");
         for (int i = 0; i < list.len; i++) {
             if (i > 0) printf(", ");
             NootValue item = noot_list_get(list, i);
             noot_print(1, &item);
         }
+        printf("]");
+        break;
+    case Table:;
+        NootTable table = val.data.Table;
+        printf("{");
+        // TODO
         printf("}");
         break;
     }
@@ -476,7 +507,7 @@ NootList noot_list_push(NootList old, NootValue val) {
     return list;
 }
 
-NootList noot_list_replace(NootList old, size_t index, NootValue val) {
+NootList noot_list_set(NootList old, size_t index, NootValue val) {
     // Push if index == len
     if (index == old.len) return noot_list_push(old, val);
     if (index > old.len); // panic
@@ -532,7 +563,7 @@ NootValue noot_insert(NootValue con, NootValue key, NootValue val) {
         case Real: index = key.data.Real; break;
         default: break; // panic
         }
-        return new_list(noot_list_replace(con.data.List, index, val));
+        return new_list(noot_list_set(con.data.List, index, val));
     default: return NOOT_NIL;
     }
 }
@@ -590,6 +621,44 @@ void noot_bad_hash(HashState* state, NootValue val) {
     case Closure: bad_hash(state, (byte*)val.data.Closure.f, sizeof(NootClosureFn)); break;
     case Error: noot_bad_hash(state, *val.data.Error); break;
     }
+}
+
+void noot_table_rehash(NootTable* table, size_t capacity) {
+    // Allocate new entries
+    NootTableEntry** new_entries = (NootTableEntry**)tgc_calloc(&noot_gc, capacity, capacity * sizeof(NootTableEntry*));
+    // For each of the old buckets ...
+    for (size_t old_index = 0; old_index < table->shared->capacity; old_index++) {
+        // For each of the entries in the old bucket ...
+        NootTableEntry* curr_old_entry = table->shared->buffer[old_index];
+        while (curr_old_entry) {
+            // Allocate a new entry
+            NootTableEntry* new_entry = (NootTableEntry*)tgc_alloc(&noot_gc, sizeof(NootTableEntry));
+            // Hash the key to determine a new index
+            HashState hash_state = DEFAULT_HASH_STATE;
+            noot_bad_hash(&hash_state, curr_old_entry->key);
+            size_t new_index = hash_state.hash % capacity;
+            // Initialize the new entry
+            new_entry->id = 0;
+            new_entry->key = curr_old_entry->key;
+            new_entry->val = curr_old_entry->val;
+            new_entry->next = new_entries[new_index];
+            new_entries[new_index] = new_entry;
+            // Insert the new entry
+            curr_old_entry = curr_old_entry->next;
+        }
+    }
+    // Create a new shared
+    NootTableShared* shared = (NootTableShared*)tgc_calloc(&noot_gc, 1, sizeof(NootTableShared));
+    // Initialize the new shared
+    shared->capacity = capacity;
+    shared->next_id = 0;
+    // Update the table
+    table->id = 0;
+    table->shared = shared;
+}
+
+NootTable noot_table_insert(NootTable old, NootValue key, NootValue val) {
+    // TODO
 }
 
 #endif
