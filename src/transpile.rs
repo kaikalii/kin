@@ -56,7 +56,7 @@ macro_rules! builtin_functions {
 }
 
 const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!("print", "println", "len", "list");
-const BUILTIN_VALUES: &[(&str, &str)] = &[];
+const BUILTIN_VALUES: &[(&str, &str)] = &[("table", "NOOT_EMPTY_TABLE")];
 
 static RESERVED_NAMES: &[&str] = &[
     // C keywords

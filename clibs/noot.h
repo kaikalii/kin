@@ -107,9 +107,8 @@ typedef struct NootListEntry {
 
 // The entry of Noot tables
 typedef struct NootTableEntry {
-    int id;
     NootValue key;
-    NootValue val;
+    NootListEntry vals;
     struct NootTableEntry* next;
 } NootTableEntry;
 
@@ -120,6 +119,12 @@ const NootValue NOOT_NIL = { .type = Nil };
 const NootValue NOOT_EMPTY_LIST = {
     .type = List,
     .data = {.List = {.id = 0, .len = 0, .shared = NULL }},
+};
+
+// An empty Noot table
+const NootValue NOOT_EMPTY_TABLE = {
+    .type = Table,
+    .data = {.Table = {.id = 0, .len = 0, .shared = NULL }},
 };
 
 // Create a new bool Noot value
@@ -182,6 +187,12 @@ NootValue new_list(NootList list) {
     return val;
 }
 
+// Create a new Noot table value from a Noot table
+NootValue new_table(NootTable table) {
+    NootValue val = { .type = Table, .data = {.Table = table} };
+    return val;
+}
+
 // Call a Noot function or closure value
 NootValue noot_call(NootValue val, int count, NootValue* args) {
     switch (val.type) {
@@ -233,7 +244,27 @@ NootValue noot_print(uint8_t count, NootValue* args) {
     case Table:;
         NootTable table = val.data.Table;
         printf("{");
-        // TODO
+        if (table.shared) {
+            int i = 0;
+            for (int j = 0; j < table.shared->capacity; j++) {
+                NootTableEntry* key_entry = table.shared->buffer[j];
+                while (key_entry) {
+                    NootListEntry* val_entry = &key_entry->vals;
+                    while (val_entry) {
+                        if (val_entry->id <= table.id) {
+                            if (i > 0) printf(", ");
+                            noot_print(1, &key_entry->key);
+                            printf(":");
+                            noot_print(1, &val_entry->val);
+                            i++;
+                            break;
+                        }
+                        val_entry = val_entry->next;
+                    }
+                    key_entry = key_entry->next;
+                }
+            }
+        }
         printf("}");
         break;
     }
@@ -554,40 +585,6 @@ NootList noot_list_pop(NootList old, NootValue* popped) {
     return list;
 }
 
-NootValue noot_insert(NootValue con, NootValue key, NootValue val) {
-    switch (con.type) {
-    case List:;
-        int index;
-        switch (key.type) {
-        case Int: index = key.data.Int; break;
-        case Real: index = key.data.Real; break;
-        default: break; // panic
-        }
-        return new_list(noot_list_set(con.data.List, index, val));
-    default: return NOOT_NIL;
-    }
-}
-
-NootValue noot_get(NootValue con, NootValue key) {
-    switch (con.type) {
-    case List:
-        switch (key.type) {
-        case Int: return noot_list_get(con.data.List, key.data.Int);
-        case Real: return noot_list_get(con.data.List, key.data.Real);
-        default: return NOOT_NIL;
-        }
-    default: return NOOT_NIL;
-    }
-}
-
-NootValue noot_len(uint8_t count, NootValue* args) {
-    switch (args[0].type) {
-    case String: return new_int(args[0].data.String.len);
-    case List: return new_int(args[0].data.List.len);
-    default: return NOOT_NIL;
-    }
-}
-
 typedef struct HashState {
     uint64_t hash;
     size_t i;
@@ -623,28 +620,58 @@ void noot_bad_hash(HashState* state, NootValue val) {
     }
 }
 
+NootValue noot_table_get(NootTable table, NootValue key) {
+    // Hash the key
+    HashState state = DEFAULT_HASH_STATE;
+    noot_bad_hash(&state, key);
+    uint64_t hash = state.hash;
+    size_t index = hash % table.shared->capacity;
+    // Look for an existing matching key and value entry
+    NootTableEntry* key_entry = table.shared->buffer[index];
+    while (key_entry) {
+        if (noot_eq_impl(key_entry->key, key)) {
+            NootListEntry* val_entry = &key_entry->vals;
+            while (val_entry) {
+                if (val_entry->id <= table.id)
+                    return val_entry->val;
+                val_entry = val_entry->next;
+            }
+            break;
+        }
+        key_entry = key_entry->next;
+    }
+    // Return nil if the entry was not found
+    return NOOT_NIL;
+}
+
+// Rehash a Noot table to have the given capacity
 void noot_table_rehash(NootTable* table, size_t capacity) {
     // Allocate new entries
-    NootTableEntry** new_entries = (NootTableEntry**)tgc_calloc(&noot_gc, capacity, capacity * sizeof(NootTableEntry*));
+    NootTableEntry** new_key_entries = (NootTableEntry**)tgc_calloc(&noot_gc, capacity, capacity * sizeof(NootTableEntry*));
     // For each of the old buckets ...
     for (size_t old_index = 0; old_index < table->shared->capacity; old_index++) {
         // For each of the entries in the old bucket ...
-        NootTableEntry* curr_old_entry = table->shared->buffer[old_index];
-        while (curr_old_entry) {
+        NootTableEntry* curr_old_key_entry = table->shared->buffer[old_index];
+        while (curr_old_key_entry) {
             // Allocate a new entry
-            NootTableEntry* new_entry = (NootTableEntry*)tgc_alloc(&noot_gc, sizeof(NootTableEntry));
+            NootTableEntry* new_key_entry = (NootTableEntry*)tgc_alloc(&noot_gc, sizeof(NootTableEntry));
             // Hash the key to determine a new index
             HashState hash_state = DEFAULT_HASH_STATE;
-            noot_bad_hash(&hash_state, curr_old_entry->key);
+            noot_bad_hash(&hash_state, curr_old_key_entry->key);
             size_t new_index = hash_state.hash % capacity;
-            // Initialize the new entry
-            new_entry->id = 0;
-            new_entry->key = curr_old_entry->key;
-            new_entry->val = curr_old_entry->val;
-            new_entry->next = new_entries[new_index];
-            new_entries[new_index] = new_entry;
+            // Initialize the value entry
+            NootListEntry new_val_entry = {
+                .id = 0,
+                .next = NULL,
+                .val = curr_old_key_entry->vals.val,
+            };
+            new_key_entry->vals = new_val_entry;
+            // Initialize the new key entry
+            new_key_entry->key = curr_old_key_entry->key;
+            new_key_entry->next = new_key_entries[new_index];
+            new_key_entries[new_index] = new_key_entry;
             // Insert the new entry
-            curr_old_entry = curr_old_entry->next;
+            curr_old_key_entry = curr_old_key_entry->next;
         }
     }
     // Create a new shared
@@ -652,13 +679,138 @@ void noot_table_rehash(NootTable* table, size_t capacity) {
     // Initialize the new shared
     shared->capacity = capacity;
     shared->next_id = 0;
+    shared->buffer = new_key_entries;
     // Update the table
     table->id = 0;
     table->shared = shared;
 }
 
 NootTable noot_table_insert(NootTable old, NootValue key, NootValue val) {
-    // TODO
+    // Create new table by copying old
+    NootTable new = old;
+    // Hash the key
+    HashState state = DEFAULT_HASH_STATE;
+    noot_bad_hash(&state, key);
+    uint64_t hash = state.hash;
+    // Check the current capacity
+    if (new.shared) {
+        // Look for an existing matching key
+        size_t index = hash % new.shared->capacity;
+        NootTableEntry* key_entry = new.shared->buffer[index];
+        NootListEntry* val_entry = NULL;
+        while (key_entry) {
+            if (noot_eq_impl(key_entry->key, key)) {
+                val_entry = &key_entry->vals;
+                while (val_entry) {
+                    if (val_entry->id <= old.id) {
+                        goto end_search;
+                    }
+                    val_entry = val_entry->next;
+                }
+                break;
+            }
+            key_entry = key_entry->next;
+        }
+    end_search:;
+        // Increment the id
+        int new_id = ++new.shared->next_id;
+        new.id = new_id;
+        // Create the new value entry
+        NootListEntry new_val_entry = {
+            .id = new_id,
+            .val = val,
+            .next = NULL,
+        };
+        // Insert 
+        if (key_entry) {
+            // Allocate memory for the child value entry
+            NootListEntry* child_val_entry = (NootListEntry*)tgc_alloc(&noot_gc, sizeof(NootListEntry));
+            *child_val_entry = key_entry->vals;
+            // Put the new val entry on top
+            new_val_entry.next = child_val_entry;
+            key_entry->vals = new_val_entry;
+        }
+        else {
+            // Create the new key entry
+            NootTableEntry* new_key_entry = (NootTableEntry*)tgc_calloc(&noot_gc, 1, sizeof(NootTableEntry));
+            new_key_entry->key = key;
+            new_key_entry->vals = new_val_entry;
+            // Insert the entry
+            new_key_entry->next = new.shared->buffer[index];
+            new.shared->buffer[index] = new_key_entry;
+        }
+        // Rehash if necessary
+        if (!val_entry) {
+            new.len++;
+            if ((float)new.len / (float)new.shared->capacity > 0.7) {
+                size_t new_capacity = (float)new.len / 0.3;
+                noot_table_rehash(&new, new_capacity);
+            }
+        }
+        return new;
+    }
+    else {
+        // Allocate the initial table
+        const size_t INITIAL_CAPACITY = 4;
+        NootTableShared* shared = (NootTableShared*)tgc_calloc(&noot_gc, 1, sizeof(NootTableShared));
+        shared->capacity = INITIAL_CAPACITY;
+        shared->buffer = (NootTableEntry**)tgc_calloc(&noot_gc, INITIAL_CAPACITY, INITIAL_CAPACITY * sizeof(NootTableEntry*));
+        shared->next_id = 1;
+        // Create the new value entry
+        NootListEntry new_val_entry = {
+            .id = 1,
+            .val = val,
+            .next = NULL,
+        };
+        // Create the new key entry
+        NootTableEntry* new_key_entry = (NootTableEntry*)tgc_calloc(&noot_gc, 1, sizeof(NootTableEntry));
+        new_key_entry->key = key;
+        new_key_entry->vals = new_val_entry;
+        // Insert the entry
+        size_t index = hash % INITIAL_CAPACITY;
+        shared->buffer[index] = new_key_entry;
+        new.shared = shared;
+        new.len = 1;
+        new.id = 1;
+        return new;
+    }
+}
+
+NootValue noot_insert(NootValue con, NootValue key, NootValue val) {
+    switch (con.type) {
+    case List:;
+        int index;
+        switch (key.type) {
+        case Int: index = key.data.Int; break;
+        case Real: index = key.data.Real; break;
+        default: break; // panic
+        }
+        return new_list(noot_list_set(con.data.List, index, val));
+    case Table:
+        return new_table(noot_table_insert(con.data.Table, key, val));
+    default: return NOOT_NIL;
+    }
+}
+
+NootValue noot_get(NootValue con, NootValue key) {
+    switch (con.type) {
+    case List:
+        switch (key.type) {
+        case Int: return noot_list_get(con.data.List, key.data.Int);
+        case Real: return noot_list_get(con.data.List, key.data.Real);
+        default: return NOOT_NIL;
+        }
+    case Table: return noot_table_get(con.data.Table, key);
+    default: return NOOT_NIL;
+    }
+}
+
+NootValue noot_len(uint8_t count, NootValue* args) {
+    switch (args[0].type) {
+    case String: return new_int(args[0].data.String.len);
+    case List: return new_int(args[0].data.List.len);
+    default: return NOOT_NIL;
+    }
 }
 
 #endif
