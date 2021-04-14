@@ -230,6 +230,7 @@ impl<'a> ParseState<'a> {
         for pair in pairs {
             match pair.as_rule() {
                 Rule::expr_call_single => {
+                    let span = pair.as_span();
                     let mut pairs = pair.into_inner();
                     let expr = self.expr_insert(pairs.next().unwrap())?;
                     let mut args = Vec::new();
@@ -241,6 +242,7 @@ impl<'a> ParseState<'a> {
                         expr: expr.into(),
                         args,
                         chained: chained.take(),
+                        span,
                     });
                 }
                 Rule::chain_call => chained = Some(pair.as_str().into()),
@@ -344,6 +346,7 @@ impl<'a> ParseState<'a> {
             Rule::closure => {
                 let span = pair.as_span();
                 let mut pairs = pair.into_inner();
+                pairs.next();
                 let mut params = Vec::new();
                 for pair in pairs.by_ref() {
                     if let Rule::param = pair.as_rule() {

@@ -56,7 +56,7 @@ macro_rules! builtin_functions {
 }
 
 const BUILTIN_FUNCTIONS: &[(&str, &str)] =
-    builtin_functions!("print", "println", "len", "list", "error");
+    builtin_functions!("print", "println", "len", "list", "error", "panic");
 const BUILTIN_VALUES: &[(&str, &str)] = &[("table", "NOOT_EMPTY_TABLE")];
 
 static RESERVED_NAMES: &[&str] = &[
@@ -154,6 +154,7 @@ pub struct Transpilation<'a> {
 
 #[derive(Clone)]
 struct CFunction {
+    noot_name: String,
     exprs: Queue<String>,
     lines: Vector<CLine>,
     captures: Vector<CCapture>,
@@ -162,18 +163,15 @@ struct CFunction {
 }
 
 impl CFunction {
-    pub fn new(name: String, line: usize, col: usize) -> CFunction {
+    pub fn new(noot_name: String) -> CFunction {
         CFunction {
+            noot_name,
             exprs: Default::default(),
             lines: Default::default(),
             captures: Default::default(),
             indent: 0,
             max_arg: 0,
         }
-        .with_raw_line(format!(
-            "noot_push_call_stack(\"{} {}:{}\");",
-            name, line, col
-        ))
     }
 }
 
@@ -270,7 +268,7 @@ impl<'a> Transpilation<'a> {
         Transpilation {
             functions: once("main")
                 // .chain(BUILTINS.iter().map(|bi| bi.0))
-                .map(|name| (name.into(), CFunction::new(name.into(), 0, 0)))
+                .map(|name| (name.into(), CFunction::new(name.into())))
                 .collect(),
             function_stack: once("main".into()).collect(),
             errors: Default::default(),
@@ -370,12 +368,11 @@ impl<'a> Transpilation<'a> {
         }
         c_name
     }
-    fn start_c_function(self, c_name: String, noot_name: String, span: Span) -> Self {
-        let (line, col) = span.split().0.line_col();
+    fn start_c_function(self, c_name: String, noot_name: String) -> Self {
         Transpilation {
             functions: self
                 .functions
-                .insert(c_name.clone(), CFunction::new(noot_name, line, col)),
+                .insert(c_name.clone(), CFunction::new(noot_name)),
             function_stack: self.function_stack.push_back(c_name),
             ..self
         }
@@ -391,8 +388,7 @@ impl<'a> Transpilation<'a> {
                 exprs: cf.exprs.dequeue().unwrap_or_default(),
                 ..cf
             };
-            cf.with_raw_line("noot_pop_call_stack();".into())
-                .with_line(None, format!("return {}", ret_expr))
+            cf.with_line(None, format!("return {}", ret_expr))
         });
         Transpilation {
             function_stack: result.function_stack.drop_last().unwrap(),
@@ -488,14 +484,8 @@ impl<'a> Transpilation<'a> {
                     is_function: true,
                 },
             );
-            let result = self.function(
-                c_name,
-                def.ident.name,
-                def.ident.span,
-                def.params,
-                def.items,
-                stack.clone(),
-            );
+            let result =
+                self.function(c_name, def.ident.name, def.params, def.items, stack.clone());
             (result, stack)
         } else {
             // Value
@@ -531,7 +521,7 @@ impl<'a> Transpilation<'a> {
     fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack) -> Self {
         let result = self.node(*expr.left, stack.clone());
         let (result, left) = result.pop_expr();
-        let f = match expr.op {
+        let (f, can_fail) = match expr.op {
             BinOp::Or | BinOp::And => {
                 let or = expr.op == BinOp::Or;
                 let temp_name = result.c_name_for("temp", false);
@@ -553,21 +543,31 @@ impl<'a> Transpilation<'a> {
                         .push_expr(temp_name)
                 });
             }
-            BinOp::Is => "noot_eq",
-            BinOp::Isnt => "noot_neq",
-            BinOp::Less => "noot_lt",
-            BinOp::LessOrEqual => "noot_le",
-            BinOp::Greater => "noot_gt",
-            BinOp::GreaterOrEqual => "noot_ge",
-            BinOp::Add => "noot_add",
-            BinOp::Sub => "noot_sub",
-            BinOp::Mul => "noot_mul",
-            BinOp::Div => "noot_div",
-            BinOp::Rem => "noot_rem",
+            BinOp::Is => ("noot_eq", false),
+            BinOp::Isnt => ("noot_neq", false),
+            BinOp::Less => ("noot_lt", false),
+            BinOp::LessOrEqual => ("noot_le", false),
+            BinOp::Greater => ("noot_gt", false),
+            BinOp::GreaterOrEqual => ("noot_ge", false),
+            BinOp::Add => ("noot_add", true),
+            BinOp::Sub => ("noot_sub", true),
+            BinOp::Mul => ("noot_mul", true),
+            BinOp::Div => ("noot_div", true),
+            BinOp::Rem => ("noot_rem", true),
         };
         let result = result.node(*expr.right, stack);
         let (result, right) = result.pop_expr();
-        result.push_expr(format!("{}({}, {})", f, left, right))
+        if can_fail {
+            let function_name = &result.curr_c_function().noot_name;
+            let (line, col) = expr.span.split().0.line_col();
+            let call_line = format!(
+                "noot_call_bin_op({}, {}, {}, \"{} {}:{}\")",
+                f, left, right, function_name, line, col
+            );
+            result.push_expr(call_line)
+        } else {
+            result.push_expr(format!("{}({}, {})", f, left, right))
+        }
     }
     fn un_expr(self, expr: UnExpr<'a>, stack: TranspileStack) -> Self {
         let result = self.node(*expr.inner, stack);
@@ -595,10 +595,13 @@ impl<'a> Transpilation<'a> {
             .cloned()
             .intersperse(", ".into())
             .collect();
-        result.push_expr(format!(
-            "noot_call({}, {}, (NootValue[]) {{ {} }})",
-            f, param_count, params
-        ))
+        let function_name = &result.curr_c_function().noot_name;
+        let (line, col) = call.span.split().0.line_col();
+        let call_line = format!(
+            "noot_call({}, {}, (NootValue[]) {{ {} }}, \"{} {}:{}\")",
+            f, param_count, params, function_name, line, col
+        );
+        result.push_expr(call_line)
     }
     fn insert_expr(self, expr: InsertExpr<'a>, stack: TranspileStack) -> Self {
         let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
@@ -642,7 +645,6 @@ impl<'a> Transpilation<'a> {
                 let result = self.function(
                     c_name.clone(),
                     "closure".into(),
-                    closure.span,
                     closure.params,
                     closure.body,
                     stack,
@@ -728,12 +730,11 @@ impl<'a> Transpilation<'a> {
         self,
         c_name: String,
         noot_name: String,
-        span: Span,
         params: Params<'a>,
         items: Items<'a>,
         stack: TranspileStack,
     ) -> Self {
-        let result = self.start_c_function(c_name.clone(), noot_name, span);
+        let result = self.start_c_function(c_name.clone(), noot_name);
         let result = result.map_c_function(|cf| {
             (0..params.len()).fold(cf, |cf, i| {
                 cf.with_line(

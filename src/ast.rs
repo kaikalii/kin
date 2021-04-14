@@ -228,6 +228,7 @@ pub struct CallExpr<'a> {
     pub expr: Box<Node<'a>>,
     pub args: Vec<Node<'a>>,
     pub chained: Option<String>,
+    pub span: Span<'a>,
 }
 
 impl<'a> fmt::Display for CallExpr<'a> {

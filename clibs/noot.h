@@ -28,11 +28,10 @@ void noot_pop_call_stack() {
     noot_call_stack_len -= 1;
 }
 
-void noot_panic(char* message) {
-    printf("Noot panicked!\n");
+void noot_panic_impl(char* message) {
     printf("%s\n", message);
     for (int i = noot_call_stack_len - 1; i >= 0; i--)
-        printf("in %s\n", noot_call_stack[i]);
+        printf("at %s\n", noot_call_stack[i]);
     exit(1);
 }
 
@@ -173,13 +172,19 @@ const NootValue NOOT_EMPTY_TABLE = {
 #define new_closure(f, captures) (NootValue) { .type = Closure, .data = { .Closure = { .f = f, .captures = captures } } }
 #define new_list(list) (NootValue) { .type = List, .data = { .List = list } }
 #define new_table(table) (NootValue) { .type = Table, .data = { .Table = table } }
-#define new_noot_string(s, len) (NootString) { .s = s, .len = len }
+#define new_noot_string(string, l) (NootString) { .s = string, .len = l }
 #define new_string(s, len) (NootValue) { .type = String, .data = { .String = new_noot_string(s, len) } }
 
 void noot_binary_type_panic(char* message, NootType a, NootType b) {
     char str[256];
-    sprintf(str, "Attempted to add incompatible types %s and %s", noot_type_names[a], noot_type_names[b]);
-    noot_panic(str);
+    sprintf(str, message, noot_type_names[a], noot_type_names[b]);
+    noot_panic_impl(str);
+}
+
+void noot_unary_type_panic(char* message, NootType ty) {
+    char str[256];
+    sprintf(str, message, ty);
+    noot_panic_impl(str);
 }
 
 // Create a new Noot error from a value
@@ -191,13 +196,20 @@ NootValue noot_error(uint8_t count, NootValue* inner) {
 }
 
 // Call a Noot function or closure value
-NootValue noot_call(NootValue val, int count, NootValue* args) {
+NootValue noot_call(NootValue val, int count, NootValue* args, char* call_site) {
+    noot_push_call_stack(call_site);
+    NootValue res;
     switch (val.type) {
-    case Function:
-        return (*val.data.Function)(count, args);
-    case Closure:
-        return (*val.data.Closure.f)(count, args, val.data.Closure.captures);
+    case Function:;
+        res = (*val.data.Function)(count, args);
+        noot_pop_call_stack();
+        return res;
+    case Closure:;
+        res = (*val.data.Closure.f)(count, args, val.data.Closure.captures);
+        noot_pop_call_stack();
+        return res;
     }
+    noot_unary_type_panic("Attempted to call %s value", val.type);
 }
 
 NootValue noot_list_get(NootList list, int i) {
@@ -288,6 +300,12 @@ NootValue noot_println(uint8_t count, NootValue* args) {
     return res;
 }
 
+NootValue noot_panic(uint8_t count, NootValue* args) {
+    printf("\nNoot panicked:\n");
+    noot_println(count, args);
+    noot_panic_impl("");
+}
+
 NootValue noot_list(uint8_t count, NootValue* values) {
     NootValue val = NOOT_EMPTY_LIST;
     val.data.List.shared = (NootListShared*)tgc_calloc(&noot_gc, 1, sizeof(NootListShared));
@@ -300,6 +318,13 @@ NootValue noot_list(uint8_t count, NootValue* values) {
         buffer[i].val = values[i];
     }
     return val;
+}
+
+NootValue noot_call_bin_op(NootValue f(NootValue, NootValue), NootValue a, NootValue b, char* call_site) {
+    noot_push_call_stack(call_site);
+    NootValue res = f(a, b);
+    noot_pop_call_stack();
+    return res;
 }
 
 NootValue noot_add(NootValue a, NootValue b) {
@@ -339,6 +364,7 @@ NootValue noot_sub(NootValue a, NootValue b) {
             return new_real(a.data.Real - b.data.Real);
         }
     }
+    noot_binary_type_panic("Attempted to subtract incompatible types %s and %s", a.type, b.type);
 }
 
 NootValue noot_mul(NootValue a, NootValue b) {
@@ -358,6 +384,7 @@ NootValue noot_mul(NootValue a, NootValue b) {
             return new_real(a.data.Real * b.data.Real);
         }
     }
+    noot_binary_type_panic("Attempted to subtract multiply types %s and %s", a.type, b.type);
 }
 
 NootValue noot_div(NootValue a, NootValue b) {
@@ -377,6 +404,7 @@ NootValue noot_div(NootValue a, NootValue b) {
             return new_real(a.data.Real / b.data.Real);
         }
     }
+    noot_binary_type_panic("Attempted to divide incompatible types %s and %s", a.type, b.type);
 }
 
 NootValue noot_rem(NootValue a, NootValue b) {
@@ -396,6 +424,7 @@ NootValue noot_rem(NootValue a, NootValue b) {
             return new_real(fmod(a.data.Real, b.data.Real));
         }
     }
+    noot_binary_type_panic("Attempted to divide incompatible types %s and %s", a.type, b.type);
 }
 
 bool noot_eq_impl(NootValue a, NootValue b) {
@@ -408,7 +437,7 @@ bool noot_eq_impl(NootValue a, NootValue b) {
             return a.data.Int == b.data.Int;
         case Real:
             return a.data.Int == b.data.Real;
-        default: return 0;
+        default: return false;
         }
     case Real:
         switch (b.type) {
@@ -416,18 +445,18 @@ bool noot_eq_impl(NootValue a, NootValue b) {
             return a.data.Real == b.data.Int;
         case Real:
             return a.data.Real == b.data.Real;
-        default: return 0;
+        default: return false;
         }
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) == 0;
-    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     case Function: return b.type == Function && a.data.Function == b.data.Function;
     case Closure: return b.type == Closure && a.data.Closure.f == b.data.Closure.f;
+    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     }
 }
 
 bool noot_lt_impl(NootValue a, NootValue b) {
     switch (a.type) {
-    case Nil: return 0;
+    case Nil: return false;
     case Bool: return b.type == Bool && a.data.Bool < b.data.Bool;
     case Int:
         switch (b.type) {
@@ -435,7 +464,7 @@ bool noot_lt_impl(NootValue a, NootValue b) {
             return a.data.Int < b.data.Int;
         case Real:
             return a.data.Int < b.data.Real;
-        default: return 0;
+        default: return false;
         }
     case Real:
         switch (b.type) {
@@ -443,18 +472,18 @@ bool noot_lt_impl(NootValue a, NootValue b) {
             return a.data.Real < b.data.Int;
         case Real:
             return a.data.Real < b.data.Real;
-        default: return 0;
+        default: return false;
         }
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) < 0;
-    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     case Function: return b.type == Function && a.data.Function < b.data.Function;
     case Closure: return b.type == Closure && a.data.Closure.f < b.data.Closure.f;
+    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     }
 }
 
 bool noot_gt_impl(NootValue a, NootValue b) {
     switch (a.type) {
-    case Nil: return 0;
+    case Nil: return false;
     case Bool: return b.type == Bool && a.data.Bool > b.data.Bool;
     case Int:
         switch (b.type) {
@@ -462,7 +491,7 @@ bool noot_gt_impl(NootValue a, NootValue b) {
             return a.data.Int > b.data.Int;
         case Real:
             return a.data.Int > b.data.Real;
-        default: return 0;
+        default: return false;
         }
     case Real:
         switch (b.type) {
@@ -470,12 +499,12 @@ bool noot_gt_impl(NootValue a, NootValue b) {
             return a.data.Real > b.data.Int;
         case Real:
             return a.data.Real > b.data.Real;
-        default: return 0;
+        default: return false;
         }
     case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) > 0;
-    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     case Function: return b.type == Function && a.data.Function > b.data.Function;
     case Closure: return b.type == Closure && a.data.Closure.f > b.data.Closure.f;
+    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
     }
 }
 
@@ -508,6 +537,7 @@ NootValue noot_neg(NootValue val) {
     case Int: return new_int(-val.data.Int);
     case Real: return new_real(-val.data.Real);
     }
+    noot_unary_type_panic("Attempted to negate %s", val.type);
 }
 
 NootValue noot_not(NootValue val) {
