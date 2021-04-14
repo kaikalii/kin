@@ -152,13 +152,29 @@ pub struct Transpilation<'a> {
     pub errors: List<TranspileError<'a>>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 struct CFunction {
     exprs: Queue<String>,
     lines: Vector<CLine>,
     captures: Vector<CCapture>,
     indent: usize,
     max_arg: usize,
+}
+
+impl CFunction {
+    pub fn new(name: String, line: usize, col: usize) -> CFunction {
+        CFunction {
+            exprs: Default::default(),
+            lines: Default::default(),
+            captures: Default::default(),
+            indent: 0,
+            max_arg: 0,
+        }
+        .with_raw_line(format!(
+            "noot_push_call_stack(\"{} {}:{}\");",
+            name, line, col
+        ))
+    }
 }
 
 struct CLine {
@@ -254,7 +270,7 @@ impl<'a> Transpilation<'a> {
         Transpilation {
             functions: once("main")
                 // .chain(BUILTINS.iter().map(|bi| bi.0))
-                .map(|name| (name.into(), CFunction::default()))
+                .map(|name| (name.into(), CFunction::new(name.into(), 0, 0)))
                 .collect(),
             function_stack: once("main".into()).collect(),
             errors: Default::default(),
@@ -354,9 +370,12 @@ impl<'a> Transpilation<'a> {
         }
         c_name
     }
-    fn start_c_function(self, c_name: String) -> Self {
+    fn start_c_function(self, c_name: String, noot_name: String, span: Span) -> Self {
+        let (line, col) = span.split().0.line_col();
         Transpilation {
-            functions: self.functions.insert(c_name.clone(), CFunction::default()),
+            functions: self
+                .functions
+                .insert(c_name.clone(), CFunction::new(noot_name, line, col)),
             function_stack: self.function_stack.push_back(c_name),
             ..self
         }
@@ -372,7 +391,8 @@ impl<'a> Transpilation<'a> {
                 exprs: cf.exprs.dequeue().unwrap_or_default(),
                 ..cf
             };
-            cf.with_line(None, format!("return {}", ret_expr))
+            cf.with_raw_line("noot_pop_call_stack();".into())
+                .with_line(None, format!("return {}", ret_expr))
         });
         Transpilation {
             function_stack: result.function_stack.drop_last().unwrap(),
@@ -468,7 +488,14 @@ impl<'a> Transpilation<'a> {
                     is_function: true,
                 },
             );
-            let result = self.function(c_name, def.params, def.items, stack.clone());
+            let result = self.function(
+                c_name,
+                def.ident.name,
+                def.ident.span,
+                def.params,
+                def.items,
+                stack.clone(),
+            );
             (result, stack)
         } else {
             // Value
@@ -612,7 +639,14 @@ impl<'a> Transpilation<'a> {
             Term::Expr(items) => self.items(items, stack),
             Term::Closure(closure) => {
                 let c_name = self.c_name_for("anon", true);
-                let result = self.function(c_name.clone(), closure.params, closure.body, stack);
+                let result = self.function(
+                    c_name.clone(),
+                    "closure".into(),
+                    closure.span,
+                    closure.params,
+                    closure.body,
+                    stack,
+                );
                 if result.functions.get(&c_name).unwrap().captures.is_empty() {
                     result.push_expr(format!("new_function(&{})", c_name))
                 } else {
@@ -643,9 +677,6 @@ impl<'a> Transpilation<'a> {
                             (self, None),
                             |(result, mut prev), stack_i| {
                                 let last = curr_stack_i == stack_i;
-                                // let function_name =
-                                //     result.function_stack.get(stack_i).unwrap().clone();
-                                // let capturer_name = result.function_stack.get(stack_i + 1).cloned();
                                 let result = if last {
                                     result.map_c_function(|cf| {
                                         let cap_i = cf.capture_index_of(&def.c_name);
@@ -696,11 +727,13 @@ impl<'a> Transpilation<'a> {
     fn function(
         self,
         c_name: String,
+        noot_name: String,
+        span: Span,
         params: Params<'a>,
         items: Items<'a>,
         stack: TranspileStack,
     ) -> Self {
-        let result = self.start_c_function(c_name.clone());
+        let result = self.start_c_function(c_name.clone(), noot_name, span);
         let result = result.map_c_function(|cf| {
             (0..params.len()).fold(cf, |cf, i| {
                 cf.with_line(

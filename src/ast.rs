@@ -363,6 +363,7 @@ impl<'a> fmt::Display for Term<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Closure<'a> {
+    pub span: Span<'a>,
     pub params: Params<'a>,
     pub body: Items<'a>,
 }

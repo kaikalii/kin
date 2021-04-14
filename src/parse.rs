@@ -342,6 +342,7 @@ impl<'a> ParseState<'a> {
                 Term::String(string)
             }
             Rule::closure => {
+                let span = pair.as_span();
                 let mut pairs = pair.into_inner();
                 let mut params = Vec::new();
                 for pair in pairs.by_ref() {
@@ -357,7 +358,7 @@ impl<'a> ParseState<'a> {
                     Rule::expr => vec![Item::Node(self.expr(pair)?)],
                     rule => unreachable!("{:?}", rule),
                 };
-                Term::Closure(Closure { params, body }.into())
+                Term::Closure(Closure { span, params, body }.into())
             }
             rule => unreachable!("{:?}", rule),
         })

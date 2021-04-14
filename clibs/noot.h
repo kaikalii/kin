@@ -10,6 +10,32 @@
 // The garbage collector
 static tgc_t noot_gc;
 
+static char** noot_call_stack = NULL;
+static size_t noot_call_stack_len = 0;
+static size_t noot_call_stack_capacity = 0;
+
+void noot_push_call_stack(char* call_string) {
+    size_t new_len = noot_call_stack_len + 1;
+    if (new_len >= noot_call_stack_capacity) {
+        noot_call_stack_capacity = noot_call_stack_capacity == 0 ? 1 : noot_call_stack_capacity * 2;
+        noot_call_stack = (char**)realloc(noot_call_stack, noot_call_stack_capacity * sizeof(char*));
+    }
+    noot_call_stack[noot_call_stack_len] = call_string;
+    noot_call_stack_len = new_len;
+}
+
+void noot_pop_call_stack() {
+    noot_call_stack_len -= 1;
+}
+
+void noot_panic(char* message) {
+    printf("Noot panicked!\n");
+    printf("%s\n", message);
+    for (int i = noot_call_stack_len - 1; i >= 0; i--)
+        printf("in %s\n", noot_call_stack[i]);
+    exit(1);
+}
+
 // The type of a byte
 typedef unsigned char byte;
 
@@ -32,6 +58,19 @@ typedef enum NootType {
     Closure,
     Error,
 } NootType;
+
+static char* noot_type_names[] = {
+    "nil",
+    "bool",
+    "int",
+    "real",
+    "string",
+    "list",
+    "table",
+    "function",
+    "function",
+    "error",
+};
 
 // Foward declarations
 
@@ -136,6 +175,12 @@ const NootValue NOOT_EMPTY_TABLE = {
 #define new_table(table) (NootValue) { .type = Table, .data = { .Table = table } }
 #define new_noot_string(s, len) (NootString) { .s = s, .len = len }
 #define new_string(s, len) (NootValue) { .type = String, .data = { .String = new_noot_string(s, len) } }
+
+void noot_binary_type_panic(char* message, NootType a, NootType b) {
+    char str[256];
+    sprintf(str, "Attempted to add incompatible types %s and %s", noot_type_names[a], noot_type_names[b]);
+    noot_panic(str);
+}
 
 // Create a new Noot error from a value
 NootValue noot_error(uint8_t count, NootValue* inner) {
@@ -274,6 +319,7 @@ NootValue noot_add(NootValue a, NootValue b) {
             return new_real(a.data.Real + b.data.Real);
         }
     }
+    noot_binary_type_panic("Attempted to add incompatible types %s and %s", a.type, b.type);
 }
 
 NootValue noot_sub(NootValue a, NootValue b) {
