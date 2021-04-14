@@ -58,7 +58,7 @@ expr = { expr_or }
 
 // Items
 equals = { "=" }
-def = { param+ ~ equals ~ (NEWLINE ~ items ~ "end" | expr) }
+def = { ident ~ param* ~ equals ~ (NEWLINE ~ items ~ "end" | expr) }
 item = { def | expr }
 items = { (item ~ NEWLINE*)+ }
 file = { SOI ~ NEWLINE* ~ items? ~ EOI }

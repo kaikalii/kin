@@ -79,7 +79,7 @@ impl<'a> ParseState<'a> {
     fn def(&self, pair: Pair<'a, Rule>) -> ParseResult<Def<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
-        let Param { ident } = self.param(pairs.next().unwrap());
+        let ident = self.ident(pairs.next().unwrap());
         let mut params = Vec::new();
         for pair in pairs.by_ref() {
             if let Rule::param = pair.as_rule() {
