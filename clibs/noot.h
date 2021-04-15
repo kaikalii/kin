@@ -183,7 +183,7 @@ void noot_binary_type_panic(char* message, NootType a, NootType b) {
 
 void noot_unary_type_panic(char* message, NootType ty) {
     char str[256];
-    sprintf(str, message, ty);
+    sprintf(str, message, noot_type_names[ty]);
     noot_panic_impl(str);
 }
 
