@@ -4,12 +4,17 @@ use pest::Span;
 
 #[derive(Debug, Clone)]
 pub enum Node<'a> {
-    Term(Term<'a>),
-    BinExpr(BinExpr<'a>),
-    UnExpr(UnExpr<'a>),
-    Call(CallExpr<'a>),
-    Insert(InsertExpr<'a>),
-    Get(GetExpr<'a>),
+    Nil,
+    Bool(bool),
+    Int(i64),
+    Real(f64),
+    String(String),
+    Expr(Nodes<'a>),
+    Ident(Ident<'a>),
+    Closure(Box<Closure<'a>>),
+    BinExpr(Box<BinExpr<'a>>),
+    UnExpr(Box<UnExpr<'a>>),
+    Call(Box<CallExpr<'a>>),
     Def(Def<'a>),
 }
 
@@ -46,21 +51,10 @@ impl<'a> Def<'a> {
 
 #[derive(Debug, Clone)]
 pub struct BinExpr<'a> {
-    pub left: Box<Node<'a>>,
-    pub right: Box<Node<'a>>,
+    pub left: Node<'a>,
+    pub right: Node<'a>,
     pub op: BinOp,
     pub span: Span<'a>,
-}
-
-impl<'a> BinExpr<'a> {
-    pub fn new(left: Node<'a>, right: Node<'a>, op: BinOp, span: Span<'a>) -> Self {
-        BinExpr {
-            left: left.into(),
-            right: right.into(),
-            op,
-            span,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,17 +76,8 @@ pub enum BinOp {
 
 #[derive(Debug, Clone)]
 pub struct UnExpr<'a> {
-    pub inner: Box<Node<'a>>,
+    pub inner: Node<'a>,
     pub op: UnOp,
-}
-
-impl<'a> UnExpr<'a> {
-    pub fn new(inner: Node<'a>, op: UnOp) -> Self {
-        UnExpr {
-            inner: inner.into(),
-            op,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -103,46 +88,9 @@ pub enum UnOp {
 
 #[derive(Debug, Clone)]
 pub struct CallExpr<'a> {
-    pub expr: Box<Node<'a>>,
+    pub expr: Node<'a>,
     pub args: Vec<Node<'a>>,
-    pub chained: Option<String>,
     pub span: Span<'a>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Insertion<'a> {
-    pub key: Access<'a>,
-    pub val: Node<'a>,
-}
-
-#[derive(Debug, Clone)]
-pub struct InsertExpr<'a> {
-    pub inner: Box<Node<'a>>,
-    pub insertions: Vec<Insertion<'a>>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Access<'a> {
-    Index(Term<'a>),
-    Field(Ident<'a>),
-}
-
-#[derive(Debug, Clone)]
-pub struct GetExpr<'a> {
-    pub inner: Box<Node<'a>>,
-    pub access: Access<'a>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Term<'a> {
-    Expr(Nodes<'a>),
-    Int(i64),
-    Real(f64),
-    Ident(Ident<'a>),
-    Bool(bool),
-    String(String),
-    Closure(Box<Closure<'a>>),
-    Nil,
 }
 
 #[derive(Debug, Clone)]

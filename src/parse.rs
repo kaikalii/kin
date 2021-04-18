@@ -116,7 +116,15 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_and(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            left = Node::BinExpr(
+                BinExpr {
+                    left,
+                    right,
+                    op,
+                    span: span.clone(),
+                }
+                .into(),
+            );
         }
         Ok(left)
     }
@@ -133,7 +141,15 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_cmp(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            left = Node::BinExpr(
+                BinExpr {
+                    left,
+                    right,
+                    op,
+                    span: span.clone(),
+                }
+                .into(),
+            );
         }
         Ok(left)
     }
@@ -155,7 +171,15 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_as(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            left = Node::BinExpr(
+                BinExpr {
+                    left,
+                    right,
+                    op,
+                    span: span.clone(),
+                }
+                .into(),
+            );
         }
         Ok(left)
     }
@@ -173,7 +197,15 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_mdr(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            left = Node::BinExpr(
+                BinExpr {
+                    left,
+                    right,
+                    op,
+                    span: span.clone(),
+                }
+                .into(),
+            );
         }
         Ok(left)
     }
@@ -182,7 +214,7 @@ impl<'a> ParseState<'a> {
         let mut pairs = pair.into_inner();
         let left = pairs.next().unwrap();
         let mut span = left.as_span();
-        let mut left = self.expr_not(left)?;
+        let mut left = self.expr_un(left)?;
         for (op, right) in pairs.tuples() {
             let op = match op.as_str() {
                 "*" => BinOp::Mul,
@@ -191,12 +223,20 @@ impl<'a> ParseState<'a> {
                 rule => unreachable!("{:?}", rule),
             };
             span = self.span(span.start(), right.as_span().end());
-            let right = self.expr_not(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            let right = self.expr_un(right)?;
+            left = Node::BinExpr(
+                BinExpr {
+                    left,
+                    right,
+                    op,
+                    span: span.clone(),
+                }
+                .into(),
+            );
         }
         Ok(left)
     }
-    fn expr_not(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
+    fn expr_un(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
         let first = pairs.next().unwrap();
@@ -212,7 +252,7 @@ impl<'a> ParseState<'a> {
         };
         let inner = self.expr_call(inner)?;
         Ok(if let Some(op) = op {
-            Node::UnExpr(UnExpr::new(inner, op))
+            Node::UnExpr(UnExpr { inner, op }.into())
         } else {
             inner
         })
@@ -221,95 +261,42 @@ impl<'a> ParseState<'a> {
         debug_pair!(pair);
         let pairs = pair.into_inner();
         let mut calls = Vec::new();
-        let mut chained = None;
         for pair in pairs {
             match pair.as_rule() {
                 Rule::expr_call_single => {
                     let span = pair.as_span();
                     let mut pairs = pair.into_inner();
-                    let expr = self.expr_insert(pairs.next().unwrap())?;
+                    let expr = self.term(pairs.next().unwrap())?;
                     let mut args = Vec::new();
                     for pair in pairs {
-                        let arg = self.expr_insert(pair)?;
+                        let arg = self.term(pair)?;
                         args.push(arg);
                     }
-                    calls.push(CallExpr {
-                        expr: expr.into(),
-                        args,
-                        chained: chained.take(),
-                        span,
-                    });
+                    calls.push(CallExpr { expr, args, span });
                 }
-                Rule::chain_call => chained = Some(pair.as_str().into()),
+                Rule::chain_call => {}
                 rule => unreachable!("{:?}", rule),
             }
         }
         let mut calls = calls.into_iter();
         let first_call = calls.next().unwrap();
         let mut call_node = if first_call.args.is_empty() {
-            *first_call.expr
+            first_call.expr
         } else {
-            Node::Call(first_call)
+            Node::Call(first_call.into())
         };
         for mut chained_call in calls {
             chained_call.args.insert(0, call_node);
-            call_node = Node::Call(chained_call);
+            call_node = Node::Call(chained_call.into());
         }
         Ok(call_node)
     }
-    fn expr_insert(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
-        debug_pair!(pair);
-        let mut pairs = pair.into_inner();
-        let inner = self.expr_get(pairs.next().unwrap())?;
-        let mut insertions = Vec::new();
-        for pair in pairs {
-            match pair.as_rule() {
-                Rule::insertion => {
-                    let mut pairs = pair.into_inner();
-                    let key = self.access(pairs.next().unwrap())?;
-                    let val = Node::Term(self.term(pairs.next().unwrap())?);
-                    insertions.push(Insertion { key, val });
-                }
-                rule => unreachable!("{:?}", rule),
-            }
-        }
-        Ok(if insertions.is_empty() {
-            inner
-        } else {
-            Node::Insert(InsertExpr {
-                inner: inner.into(),
-                insertions,
-            })
-        })
-    }
-    fn expr_get(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
-        debug_pair!(pair);
-        let mut pairs = pair.into_inner();
-        let mut node = Node::Term(self.term(pairs.next().unwrap())?);
-        for pair in pairs {
-            let access = self.access(pair)?;
-            node = Node::Get(GetExpr {
-                inner: node.into(),
-                access,
-            })
-        }
-        Ok(node)
-    }
-    fn access(&self, pair: Pair<'a, Rule>) -> ParseResult<Access<'a>> {
-        debug_pair!(pair);
-        let pair = only(pair);
-        Ok(match pair.as_rule() {
-            Rule::ident => Access::Field(self.ident(pair)),
-            Rule::term => Access::Index(self.term(pair)?),
-            rule => unreachable!("{:?}", rule),
-        })
-    }
-    fn term(&self, pair: Pair<'a, Rule>) -> ParseResult<Term<'a>> {
+    fn term(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let pair = only(pair);
         macro_rules! number_literal {
             ($term:ident) => {
-                pair.as_str().parse().map(Term::$term).map_err(|_| {
+                pair.as_str().parse().map(Node::$term).map_err(|_| {
                     PestError::new_from_span(
                         ErrorVariant::CustomError {
                             message: format!(
@@ -326,17 +313,17 @@ impl<'a> ParseState<'a> {
         Ok(match pair.as_rule() {
             Rule::int => number_literal!(Int)?,
             Rule::real => number_literal!(Real)?,
-            Rule::nil => Term::Nil,
-            Rule::bool_literal => Term::Bool(pair.as_str() == "true"),
-            Rule::ident => Term::Ident(self.ident(pair)),
+            Rule::nil => Node::Nil,
+            Rule::bool_literal => Node::Bool(pair.as_str() == "true"),
+            Rule::ident => Node::Ident(self.ident(pair)),
             Rule::paren_expr => {
                 let pair = only(pair);
                 let nodes = self.nodes(pair)?;
-                Term::Expr(nodes)
+                Node::Expr(nodes)
             }
             Rule::string => {
                 let string = self.string_literal(pair);
-                Term::String(string)
+                Node::String(string)
             }
             Rule::closure => {
                 let span = pair.as_span();
@@ -356,7 +343,7 @@ impl<'a> ParseState<'a> {
                     Rule::expr => vec![self.expr(pair)?],
                     rule => unreachable!("{:?}", rule),
                 };
-                Term::Closure(Closure { span, params, body }.into())
+                Node::Closure(Closure { span, params, body }.into())
             }
             rule => unreachable!("{:?}", rule),
         })
