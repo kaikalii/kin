@@ -1,36 +1,35 @@
-use std::{collections::HashMap, error::Error, fmt, rc::Rc};
+use std::{collections::HashMap, error::Error, fmt};
 
 use pest::{
     error::{Error as PestError, ErrorVariant},
     Span,
 };
 
-use crate::{ast::*, parse::Rule};
+use crate::{ast::*, parse::Rule, value::*};
 
-#[derive(Debug, Clone)]
-pub enum Val {
-    Nil,
-    Bool(bool),
-    Int(i64),
-    Real(f64),
-    String(String),
-    List(Rc<Val>, Rc<Val>),
-    Tree(Rc<Val>, Rc<Val>, Rc<Val>),
-    Function(usize),
-    Error(Rc<Val>),
-}
-
-#[derive(Debug)]
 pub enum Instr {
     PushLiteral(Val),
     PushFromStack(usize),
-    Call,
+    Call(usize),
     Ret,
+    Builtin(BuiltinFn),
+}
+
+impl fmt::Debug for Instr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Instr::PushLiteral(val) => write!(f, "{:?}", val),
+            Instr::PushFromStack(i) => write!(f, "[-{}]", i),
+            Instr::Call(i) => write!(f, "call {}", i),
+            Instr::Ret => write!(f, "return"),
+            Instr::Builtin(_) => write!(f, "builtin"),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct Jitter<'a> {
-    instrs: Vec<Instr>,
+    pub instrs: Vec<Instr>,
     scopes: Vec<Scope>,
     pub errors: Vec<JitError<'a>>,
 }
@@ -81,11 +80,32 @@ impl<'a> Error for JitError<'a> {}
 
 impl<'a> Jitter<'a> {
     pub fn new() -> Self {
-        Jitter {
+        let mut jitter = Jitter {
             instrs: Vec::new(),
             scopes: vec![Scope::default()],
             errors: Vec::new(),
+        };
+        macro_rules! binops {
+            ($($name:ident),*) => {
+                $(jitter.add_builtin(stringify!($name), |stack| {
+                    let right = stack.pop().unwrap();
+                    let left = stack.pop().unwrap();
+                    stack.push(Val::$name(left, right));
+                }))*
+            }
         }
+        binops!(add);
+        jitter
+    }
+    fn add_builtin(&mut self, name: &str, f: BuiltinFn) {
+        let index = self.instrs.len();
+        self.scopes
+            .last_mut()
+            .unwrap()
+            .names
+            .insert(name.into(), index);
+        self.instrs.push(Instr::Builtin(f));
+        self.instrs.push(Instr::Ret);
     }
     fn find_name(&self, name: &str) -> Option<usize> {
         self.scopes
@@ -126,11 +146,19 @@ impl<'a> Jitter<'a> {
             self.jit_node(node);
         }
         self.jit_node(&call.expr);
-        self.instrs.push(Instr::Call);
+        self.instrs.push(Instr::Call(call.args.len()));
     }
     fn jit_bin(&mut self, expr: &BinExpr<'a>) {
-        match expr.op {
-            _ => todo!(),
-        }
+        let function_name = match expr.op {
+            BinOp::Add => "add",
+            op => todo!("{:?}", op),
+        };
+        self.jit_node(&expr.left);
+        self.jit_node(&expr.right);
+        let index = self
+            .find_name(function_name)
+            .unwrap_or_else(|| panic!("No function named {:?}", function_name));
+        self.instrs.push(Instr::PushLiteral(Val::Function(index)));
+        self.instrs.push(Instr::Call(2));
     }
 }

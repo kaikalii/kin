@@ -3,6 +3,7 @@
 mod ast;
 mod jit;
 mod parse;
+mod value;
 
 fn main() {
     color_backtrace::install();
@@ -19,6 +20,9 @@ fn main() {
             let mut jitter = Jitter::new();
             jitter.jit_nodes(&nodes);
             if jitter.errors.is_empty() {
+                for instr in jitter.instrs {
+                    println!("{:?}", instr);
+                }
             } else {
                 for error in jitter.errors {
                     println!("{}", error);
