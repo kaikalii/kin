@@ -9,7 +9,7 @@ fn main() {
     let input = std::fs::read_to_string("test.noot").unwrap();
     // Parse
     match parse::parse(&input) {
-        Ok(_items) => {
+        Ok(_nodes) => {
             #[cfg(feature = "debug")]
             println!("{:#?}", items);
             // Transpile

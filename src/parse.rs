@@ -29,9 +29,9 @@ where
 #[grammar = "grammar.pest"]
 struct NootParser;
 
-pub fn parse(input: &str) -> ParseResult<Items> {
+pub fn parse(input: &str) -> ParseResult<Nodes> {
     match NootParser::parse(Rule::file, input) {
-        Ok(mut pairs) => ParseState { input }.items(only(pairs.next().unwrap())),
+        Ok(mut pairs) => ParseState { input }.nodes(only(pairs.next().unwrap())),
         Err(e) => Err(e),
     }
 }
@@ -44,24 +44,24 @@ impl<'a> ParseState<'a> {
     fn span(&self, start: usize, end: usize) -> Span<'a> {
         Span::new(self.input, start, end).unwrap()
     }
-    fn items(&self, pair: Pair<'a, Rule>) -> ParseResult<Items<'a>> {
+    fn nodes(&self, pair: Pair<'a, Rule>) -> ParseResult<Nodes<'a>> {
         debug_pair!(pair);
-        let mut items = Vec::new();
+        let mut nodes = Vec::new();
         for pair in pair.into_inner() {
             match pair.as_rule() {
-                Rule::item => items.push(self.item(pair)?),
+                Rule::node => nodes.push(self.node(pair)?),
                 Rule::EOI => {}
                 rule => unreachable!("{:?}", rule),
             }
         }
-        Ok(items)
+        Ok(nodes)
     }
-    fn item(&self, pair: Pair<'a, Rule>) -> ParseResult<Item<'a>> {
+    fn node(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
         debug_pair!(pair);
         let pair = only(pair);
         Ok(match pair.as_rule() {
-            Rule::expr => Item::Node(self.expr(pair)?),
-            Rule::def => Item::Def(self.def(pair)?),
+            Rule::expr => self.expr(pair)?,
+            Rule::def => Node::Def(self.def(pair)?),
             rule => unreachable!("{:?}", rule),
         })
     }
@@ -71,11 +71,6 @@ impl<'a> ParseState<'a> {
             span: pair.as_span(),
         }
     }
-    fn param(&self, pair: Pair<'a, Rule>) -> Param<'a> {
-        let mut pairs = pair.into_inner();
-        let ident = self.ident(pairs.next().unwrap());
-        Param { ident }
-    }
     fn def(&self, pair: Pair<'a, Rule>) -> ParseResult<Def<'a>> {
         debug_pair!(pair);
         let mut pairs = pair.into_inner();
@@ -83,21 +78,21 @@ impl<'a> ParseState<'a> {
         let mut params = Vec::new();
         for pair in pairs.by_ref() {
             if let Rule::param = pair.as_rule() {
-                params.push(self.param(pair));
+                params.push(self.ident(pair));
             } else {
                 break;
             }
         }
         let pair = pairs.next().unwrap();
-        let items = match pair.as_rule() {
-            Rule::items => self.items(pair)?,
-            Rule::expr => vec![Item::Node(self.expr(pair)?)],
+        let nodes = match pair.as_rule() {
+            Rule::nodes => self.nodes(pair)?,
+            Rule::expr => vec![self.expr(pair)?],
             rule => unreachable!("{:?}", rule),
         };
         Ok(Def {
             ident,
             params,
-            items,
+            nodes,
         })
     }
     fn expr(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
@@ -336,8 +331,8 @@ impl<'a> ParseState<'a> {
             Rule::ident => Term::Ident(self.ident(pair)),
             Rule::paren_expr => {
                 let pair = only(pair);
-                let items = self.items(pair)?;
-                Term::Expr(items)
+                let nodes = self.nodes(pair)?;
+                Term::Expr(nodes)
             }
             Rule::string => {
                 let string = self.string_literal(pair);
@@ -350,15 +345,15 @@ impl<'a> ParseState<'a> {
                 let mut params = Vec::new();
                 for pair in pairs.by_ref() {
                     if let Rule::param = pair.as_rule() {
-                        params.push(self.param(pair));
+                        params.push(self.ident(pair));
                     } else {
                         break;
                     }
                 }
                 let pair = pairs.next().unwrap();
                 let body = match pair.as_rule() {
-                    Rule::items => self.items(pair)?,
-                    Rule::expr => vec![Item::Node(self.expr(pair)?)],
+                    Rule::nodes => self.nodes(pair)?,
+                    Rule::expr => vec![self.expr(pair)?],
                     rule => unreachable!("{:?}", rule),
                 };
                 Term::Closure(Closure { span, params, body }.into())

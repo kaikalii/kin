@@ -34,12 +34,12 @@ op_or = { "or" }
 op_un = { "not" | "-" }
 
 // Expressions
-paren_expr = { "(" ~ NEWLINE? ~ items ~ NEWLINE? ~ ")" }
+paren_expr = { "(" ~ NEWLINE? ~ nodes ~ NEWLINE? ~ ")" }
 bool_literal = { "true" | "false" }
 nil = { "nil" }
 bar = { "|" }
 param = { ident }
-closure = { bar ~ param* ~ bar ~ (NEWLINE ~ items ~ "end" | expr)}
+closure = { bar ~ param* ~ bar ~ (NEWLINE ~ nodes ~ "end" | expr)}
 term = { real | int | closure | ident | bool_literal | nil | string | paren_expr }
 access = { "'" ~ term | "." ~ ident }
 expr_get = { term ~ (access ~ !":")* }
@@ -58,7 +58,7 @@ expr = { expr_or }
 
 // Items
 equals = { "=" }
-def = { ident ~ param* ~ equals ~ (NEWLINE ~ items ~ "end" | expr) }
-item = { def | expr }
-items = { (item ~ NEWLINE*)+ }
-file = { SOI ~ NEWLINE* ~ items? ~ EOI }
+def = { ident ~ param* ~ equals ~ (NEWLINE ~ nodes ~ "end" | expr) }
+node = { def | expr }
+nodes = { (node ~ NEWLINE*)+ }
+file = { SOI ~ NEWLINE* ~ nodes? ~ EOI }

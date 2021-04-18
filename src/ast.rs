@@ -3,6 +3,17 @@
 use pest::Span;
 
 #[derive(Debug, Clone)]
+pub enum Node<'a> {
+    Term(Term<'a>),
+    BinExpr(BinExpr<'a>),
+    UnExpr(UnExpr<'a>),
+    Call(CallExpr<'a>),
+    Insert(InsertExpr<'a>),
+    Get(GetExpr<'a>),
+    Def(Def<'a>),
+}
+
+#[derive(Debug, Clone)]
 pub struct Ident<'a> {
     pub name: String,
     pub span: Span<'a>,
@@ -16,42 +27,21 @@ impl<'a> PartialEq for Ident<'a> {
 
 impl<'a> Eq for Ident<'a> {}
 
-#[derive(Debug, Clone)]
-pub enum Item<'a> {
-    Node(Node<'a>),
-    Def(Def<'a>),
-}
+pub type Nodes<'a> = Vec<Node<'a>>;
 
-pub type Items<'a> = Vec<Item<'a>>;
-
-#[derive(Debug, Clone)]
-pub struct Param<'a> {
-    pub ident: Ident<'a>,
-}
-
-pub type Params<'a> = Vec<Param<'a>>;
+pub type Params<'a> = Vec<Ident<'a>>;
 
 #[derive(Debug, Clone)]
 pub struct Def<'a> {
     pub ident: Ident<'a>,
     pub params: Params<'a>,
-    pub items: Items<'a>,
+    pub nodes: Nodes<'a>,
 }
 
 impl<'a> Def<'a> {
     pub fn is_function(&self) -> bool {
         !self.params.is_empty()
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum Node<'a> {
-    Term(Term<'a>),
-    BinExpr(BinExpr<'a>),
-    UnExpr(UnExpr<'a>),
-    Call(CallExpr<'a>),
-    Insert(InsertExpr<'a>),
-    Get(GetExpr<'a>),
 }
 
 #[derive(Debug, Clone)]
@@ -145,7 +135,7 @@ pub struct GetExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub enum Term<'a> {
-    Expr(Items<'a>),
+    Expr(Nodes<'a>),
     Int(i64),
     Real(f64),
     Ident(Ident<'a>),
@@ -159,5 +149,5 @@ pub enum Term<'a> {
 pub struct Closure<'a> {
     pub span: Span<'a>,
     pub params: Params<'a>,
-    pub body: Items<'a>,
+    pub body: Nodes<'a>,
 }
