@@ -18,7 +18,12 @@ fn main() {
 
             let mut jitter = Jitter::new();
             jitter.jit_nodes(&nodes);
-            println!("{:#?}", jitter);
+            if jitter.errors.is_empty() {
+            } else {
+                for error in jitter.errors {
+                    println!("{}", error);
+                }
+            }
         }
         Err(e) => println!("{}", e),
     }
