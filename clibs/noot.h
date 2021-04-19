@@ -456,56 +456,48 @@ bool noot_eq_impl(NootValue a, NootValue b) {
 
 bool noot_lt_impl(NootValue a, NootValue b) {
     switch (a.type) {
-    case Nil: return false;
-    case Bool: return b.type == Bool && a.data.Bool < b.data.Bool;
+    case Bool: if (b.type == Bool) return a.data.Bool < b.data.Bool; break;
     case Int:
         switch (b.type) {
-        case Int:
-            return a.data.Int < b.data.Int;
-        case Real:
-            return a.data.Int < b.data.Real;
-        default: return false;
+        case Int: return a.data.Int < b.data.Int;
+        case Real: return a.data.Int < b.data.Real;
         }
+        break;
     case Real:
         switch (b.type) {
-        case Int:
-            return a.data.Real < b.data.Int;
-        case Real:
-            return a.data.Real < b.data.Real;
-        default: return false;
+        case Int: return a.data.Real < b.data.Int;
+        case Real: return a.data.Real < b.data.Real;
         }
-    case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) < 0;
-    case Function: return b.type == Function && a.data.Function < b.data.Function;
-    case Closure: return b.type == Closure && a.data.Closure.f < b.data.Closure.f;
-    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
+        break;
+    case String: if (b.type == String) return utf8cmp(a.data.String.s, b.data.String.s) < 0; break;
+    case Function: if (b.type == Function) return a.data.Function < b.data.Function; break;
+    case Closure: if (b.type == Closure) return a.data.Closure.f < b.data.Closure.f; break;
+    case Error: if (b.type == Error) return noot_eq_impl(*a.data.Error, *b.data.Error); break;
     }
+    noot_binary_type_panic("Attempted to compare incompatible types %s and %s", a.type, b.type);
 }
 
 bool noot_gt_impl(NootValue a, NootValue b) {
     switch (a.type) {
-    case Nil: return false;
-    case Bool: return b.type == Bool && a.data.Bool > b.data.Bool;
+    case Bool: if (b.type == Bool) return a.data.Bool > b.data.Bool; break;
     case Int:
         switch (b.type) {
-        case Int:
-            return a.data.Int > b.data.Int;
-        case Real:
-            return a.data.Int > b.data.Real;
-        default: return false;
+        case Int: return a.data.Int > b.data.Int;
+        case Real: return a.data.Int > b.data.Real;
         }
+        break;
     case Real:
         switch (b.type) {
-        case Int:
-            return a.data.Real > b.data.Int;
-        case Real:
-            return a.data.Real > b.data.Real;
-        default: return false;
+        case Int: return a.data.Real > b.data.Int;
+        case Real: return a.data.Real > b.data.Real;
         }
-    case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) > 0;
-    case Function: return b.type == Function && a.data.Function > b.data.Function;
-    case Closure: return b.type == Closure && a.data.Closure.f > b.data.Closure.f;
-    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
+        break;
+    case String: if (b.type == String) return utf8cmp(a.data.String.s, b.data.String.s) > 0; break;
+    case Function: if (b.type == Function) return a.data.Function > b.data.Function; break;
+    case Closure: if (b.type == Closure) return a.data.Closure.f > b.data.Closure.f; break;
+    case Error: if (b.type == Error) return noot_eq_impl(*a.data.Error, *b.data.Error); break;
     }
+    noot_binary_type_panic("Attempted to compare incompatible types %s and %s", a.type, b.type);
 }
 
 NootValue noot_eq(NootValue a, NootValue b) {
