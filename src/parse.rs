@@ -115,13 +115,14 @@ impl<'a> ParseState<'a> {
         let mut span = left.as_span();
         let mut left = self.expr_and(left)?;
         for (op, right) in pairs.tuples() {
+            let op_span = op.as_span();
             let op = match op.as_str() {
                 "or" => BinOp::Or,
                 rule => unreachable!("{:?}", rule),
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_and(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
         }
         Ok(left)
     }
@@ -132,13 +133,14 @@ impl<'a> ParseState<'a> {
         let mut span = left.as_span();
         let mut left = self.expr_cmp(left)?;
         for (op, right) in pairs.tuples() {
+            let op_span = op.as_span();
             let op = match op.as_str() {
                 "and" => BinOp::And,
                 rule => unreachable!("{:?}", rule),
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_cmp(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
         }
         Ok(left)
     }
@@ -149,6 +151,7 @@ impl<'a> ParseState<'a> {
         let mut span = left.as_span();
         let mut left = self.expr_as(left)?;
         for (op, right) in pairs.tuples() {
+            let op_span = op.as_span();
             let op = match op.as_str() {
                 "is" => BinOp::Is,
                 "isnt" => BinOp::Isnt,
@@ -160,7 +163,7 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_as(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
         }
         Ok(left)
     }
@@ -171,6 +174,7 @@ impl<'a> ParseState<'a> {
         let mut span = left.as_span();
         let mut left = self.expr_mdr(left)?;
         for (op, right) in pairs.tuples() {
+            let op_span = op.as_span();
             let op = match op.as_str() {
                 "+" => BinOp::Add,
                 "-" => BinOp::Sub,
@@ -178,7 +182,7 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_mdr(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
         }
         Ok(left)
     }
@@ -189,6 +193,7 @@ impl<'a> ParseState<'a> {
         let mut span = left.as_span();
         let mut left = self.expr_not(left)?;
         for (op, right) in pairs.tuples() {
+            let op_span = op.as_span();
             let op = match op.as_str() {
                 "*" => BinOp::Mul,
                 "/" => BinOp::Div,
@@ -197,7 +202,7 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_not(right)?;
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone()));
+            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
         }
         Ok(left)
     }

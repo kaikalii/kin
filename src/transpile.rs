@@ -559,7 +559,7 @@ impl<'a> Transpilation<'a> {
         let (result, right) = result.pop_expr();
         if can_fail {
             let function_name = &result.curr_c_function().noot_name;
-            let (line, col) = expr.span.split().0.line_col();
+            let (line, col) = expr.op_span.split().0.line_col();
             let call_line = format!(
                 "noot_call_bin_op({}, {}, {}, \"{} {}:{}\")",
                 f, left, right, function_name, line, col
