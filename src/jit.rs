@@ -97,13 +97,12 @@ impl<'a> Jitter<'a> {
         binops!(add);
         jitter
     }
+    fn scope(&mut self) -> &mut Scope {
+        self.scopes.last_mut().unwrap()
+    }
     fn add_builtin(&mut self, name: &str, f: BuiltinFn) {
         let index = self.instrs.len();
-        self.scopes
-            .last_mut()
-            .unwrap()
-            .names
-            .insert(name.into(), index);
+        self.scope().names.insert(name.into(), index);
         self.instrs.push(Instr::Builtin(f));
         self.instrs.push(Instr::Ret);
     }
@@ -138,6 +137,7 @@ impl<'a> Jitter<'a> {
             Node::Expr(nodes) => self.jit_nodes(nodes),
             Node::Call(call) => self.jit_call(call),
             Node::BinExpr(expr) => self.jit_bin(expr),
+            Node::Def(def) => self.jit_def(def),
             node => todo!("{:?}", node),
         }
     }
@@ -160,5 +160,15 @@ impl<'a> Jitter<'a> {
             .unwrap_or_else(|| panic!("No function named {:?}", function_name));
         self.instrs.push(Instr::PushLiteral(Val::Function(index)));
         self.instrs.push(Instr::Call(2));
+    }
+    fn jit_def(&mut self, def: &Def<'a>) {
+        if def.params.is_empty() {
+            // Value
+            self.jit_nodes(&def.nodes);
+            let index = self.instrs.len() - 1; //wrong
+            self.scope().names.insert(def.ident.name.clone(), index);
+        } else {
+            //Function
+        }
     }
 }
