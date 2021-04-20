@@ -361,6 +361,9 @@ impl<'a> Transpilation<'a> {
     }
     fn c_name_for(&self, noot_name: &str, function: bool) -> String {
         let mut c_name = noot_name.to_owned();
+        if c_name.starts_with("noot") || c_name.starts_with("Noot") {
+            c_name = "_".to_owned() + &c_name;
+        }
         let mut i = 1;
         while self.c_name_exists(&c_name, function) {
             i += 1;
