@@ -169,7 +169,7 @@ const NootValue NOOT_EMPTY_TABLE = {
 #define new_int(i) (NootValue) { .type = Int, .data = { .Int = i } }
 #define new_real(i) (NootValue) { .type = Real, .data = { .Real = i } }
 #define new_function(f) (NootValue) { .type = Function, .data = { .Function = f } }
-#define new_closure(f, captures) (NootValue) { .type = Closure, .data = { .Closure = { .f = f, .captures = captures } } }
+#define new_closure(function, caps) (NootValue) { .type = Closure, .data = { .Closure = { .f = function, .captures = caps } } }
 #define new_list(list) (NootValue) { .type = List, .data = { .List = list } }
 #define new_table(table) (NootValue) { .type = Table, .data = { .Table = table } }
 #define new_noot_string(string, l) (NootString) { .s = string, .len = l }

@@ -656,22 +656,34 @@ impl<'a> Transpilation<'a> {
                 }
             }
             Term::Ident(ident) => {
+                dbg!(&ident.name);
                 if let Some(def) = stack
                     .noot_scopes
                     .iter()
                     .rev()
                     .find_map(|scope| scope.get(&ident.name))
                 {
-                    if let Some(ident_i) = self
+                    dbg!(&def.c_name);
+                    if let Some((ident_i, value_name)) = self
                         .function_stack
                         .iter()
-                        .position(|c_name| {
+                        .enumerate()
+                        .find_map(|(i, c_name)| {
                             let cf = self.functions.get(c_name).unwrap();
-                            cf.lines.iter().any(|line| {
-                                line.var_name.as_ref().map_or(false, |vn| vn == &def.c_name)
-                            })
+                            cf.lines
+                                .iter()
+                                .find_map(|line| {
+                                    line.var_name
+                                        .as_ref()
+                                        .filter(|&vn| {
+                                            vn == &def.c_name
+                                                || vn == &format!("{}_closure", def.c_name)
+                                        })
+                                        .cloned()
+                                })
+                                .map(|n| (i, n))
                         })
-                        .filter(|&i| self.function_stack.len() - i > 1)
+                        .filter(|(i, _)| self.function_stack.len() - i > 1)
                     {
                         // Captures
                         let curr_stack_i = self.function_stack.len() - 1;
@@ -681,16 +693,16 @@ impl<'a> Transpilation<'a> {
                                 let last = curr_stack_i == stack_i;
                                 let result = if last {
                                     result.map_c_function(|cf| {
-                                        let cap_i = cf.capture_index_of(&def.c_name);
+                                        let cap_i = cf.capture_index_of(&value_name);
                                         cf.push_expr(format!("captures[{}]", cap_i))
                                     })
                                 } else {
                                     result.map_c_function_at(stack_i + 1, |cf| {
                                         let cf = cf.with_capture(
-                                            def.c_name.clone(),
-                                            prev.clone().unwrap_or_else(|| def.c_name.clone()),
+                                            value_name.clone(),
+                                            prev.clone().unwrap_or_else(|| value_name.clone()),
                                         );
-                                        let cap_i = cf.capture_index_of(&def.c_name);
+                                        let cap_i = cf.capture_index_of(&value_name);
                                         prev = Some(format!("captures[{}]", cap_i));
                                         cf
                                     })
