@@ -4,7 +4,7 @@ use pest::Span;
 
 #[derive(Debug, Clone)]
 pub struct Ident<'a> {
-    pub name: String,
+    pub name: &'a str,
     pub span: Span<'a>,
 }
 

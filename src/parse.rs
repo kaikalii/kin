@@ -67,7 +67,7 @@ impl<'a> ParseState<'a> {
     }
     fn ident(&self, pair: Pair<'a, Rule>) -> Ident<'a> {
         Ident {
-            name: pair.as_str().into(),
+            name: pair.as_str(),
             span: pair.as_span(),
         }
     }

@@ -1,6 +1,7 @@
 #![allow(unstable_name_collisions)]
 
 mod ast;
+mod check;
 mod parse;
 mod transpile;
 

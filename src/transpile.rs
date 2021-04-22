@@ -15,20 +15,20 @@ use rpds::{List, Queue, RedBlackTreeMap, Vector};
 use crate::{ast::*, parse::Rule};
 
 #[derive(Debug, thiserror::Error)]
-pub enum TranspileErrorKind {
+pub enum TranspileErrorKind<'a> {
     #[error("Unknown definition {0}")]
-    UnknownDef(String),
+    UnknownDef(&'a str),
 }
 
-impl TranspileErrorKind {
-    pub fn span(self, span: Span) -> TranspileError {
+impl<'a> TranspileErrorKind<'a> {
+    pub fn span(self, span: Span<'a>) -> TranspileError {
         TranspileError { kind: self, span }
     }
 }
 
 #[derive(Debug)]
 pub struct TranspileError<'a> {
-    pub kind: TranspileErrorKind,
+    pub kind: TranspileErrorKind<'a>,
     pub span: Span<'a>,
 }
 
@@ -100,11 +100,11 @@ static RESERVED_NAMES: &[&str] = &[
 ];
 
 #[derive(Clone)]
-struct TranspileStack {
-    noot_scopes: Vector<RedBlackTreeMap<String, NootDef>>,
+struct TranspileStack<'a> {
+    noot_scopes: Vector<RedBlackTreeMap<&'a str, NootDef>>,
 }
 
-impl TranspileStack {
+impl<'a> TranspileStack<'a> {
     pub fn new() -> Self {
         TranspileStack {
             noot_scopes: Vector::new().push_back(
@@ -112,7 +112,7 @@ impl TranspileStack {
                     .iter()
                     .map(|&(noot_name, c_name)| {
                         (
-                            noot_name.into(),
+                            noot_name,
                             NootDef {
                                 c_name: c_name.into(),
                                 is_function: true,
@@ -121,7 +121,7 @@ impl TranspileStack {
                     })
                     .chain(BUILTIN_VALUES.iter().map(|&(noot_name, c_name)| {
                         (
-                            noot_name.into(),
+                            noot_name,
                             NootDef {
                                 c_name: c_name.into(),
                                 is_function: false,
@@ -132,7 +132,7 @@ impl TranspileStack {
             ),
         }
     }
-    pub fn with_noot_def(self, name: String, def: NootDef) -> Self {
+    pub fn with_noot_def(self, name: &'a str, def: NootDef) -> Self {
         TranspileStack {
             noot_scopes: self
                 .noot_scopes
@@ -147,14 +147,14 @@ impl TranspileStack {
 
 #[derive(Clone)]
 pub struct Transpilation<'a> {
-    functions: RedBlackTreeMap<String, CFunction>,
+    functions: RedBlackTreeMap<String, CFunction<'a>>,
     function_stack: Vector<String>,
     pub errors: List<TranspileError<'a>>,
 }
 
 #[derive(Clone)]
-struct CFunction {
-    noot_name: String,
+struct CFunction<'a> {
+    noot_name: &'a str,
     exprs: Queue<String>,
     lines: Vector<CLine>,
     captures: Vector<CCapture>,
@@ -162,8 +162,8 @@ struct CFunction {
     max_arg: usize,
 }
 
-impl CFunction {
-    pub fn new(noot_name: String) -> CFunction {
+impl<'a> CFunction<'a> {
+    pub fn new(noot_name: &'a str) -> CFunction {
         CFunction {
             noot_name,
             exprs: Default::default(),
@@ -187,7 +187,7 @@ struct CCapture {
     pub capture_name: String,
 }
 
-impl CFunction {
+impl<'a> CFunction<'a> {
     pub fn with_line(self, var_name: Option<String>, value: String) -> Self {
         CFunction {
             lines: self.lines.push_back(CLine {
@@ -268,7 +268,7 @@ impl<'a> Transpilation<'a> {
         Transpilation {
             functions: once("main")
                 // .chain(BUILTINS.iter().map(|bi| bi.0))
-                .map(|name| (name.into(), CFunction::new(name.into())))
+                .map(|name| (name.into(), CFunction::new(name)))
                 .collect(),
             function_stack: once("main".into()).collect(),
             errors: Default::default(),
@@ -371,7 +371,7 @@ impl<'a> Transpilation<'a> {
         }
         c_name
     }
-    fn start_c_function(self, c_name: String, noot_name: String) -> Self {
+    fn start_c_function(self, c_name: String, noot_name: &'a str) -> Self {
         Transpilation {
             functions: self
                 .functions
@@ -439,7 +439,7 @@ impl<'a> Transpilation<'a> {
             ..self
         }
     }
-    fn items(self, items: Items<'a>, stack: TranspileStack) -> Self {
+    fn items(self, items: Items<'a>, stack: TranspileStack<'a>) -> Self {
         let item_count = items.len();
         items
             .into_iter()
@@ -466,7 +466,7 @@ impl<'a> Transpilation<'a> {
             .0
     }
 
-    fn item(self, item: Item<'a>, stack: TranspileStack) -> (Self, TranspileStack) {
+    fn item(self, item: Item<'a>, stack: TranspileStack<'a>) -> (Self, TranspileStack<'a>) {
         match item {
             Item::Def(def) => self.def(def, stack),
             Item::Node(node) => {
@@ -476,12 +476,12 @@ impl<'a> Transpilation<'a> {
         }
     }
 
-    fn def(self, def: Def<'a>, stack: TranspileStack) -> (Self, TranspileStack) {
+    fn def(self, def: Def<'a>, stack: TranspileStack<'a>) -> (Self, TranspileStack<'a>) {
         let c_name = self.c_name_for(&def.ident.name, def.is_function());
         if def.is_function() {
             // Function
             let stack = stack.with_noot_def(
-                def.ident.name.clone(),
+                def.ident.name,
                 NootDef {
                     c_name: c_name.clone(),
                     is_function: true,
@@ -511,7 +511,7 @@ impl<'a> Transpilation<'a> {
             (result, stack)
         }
     }
-    fn node(self, node: Node<'a>, stack: TranspileStack) -> Self {
+    fn node(self, node: Node<'a>, stack: TranspileStack<'a>) -> Self {
         match node {
             Node::Term(term) => self.term(term, stack),
             Node::BinExpr(expr) => self.bin_expr(expr, stack),
@@ -521,7 +521,7 @@ impl<'a> Transpilation<'a> {
             Node::Get(expr) => self.get_expr(expr, stack),
         }
     }
-    fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack) -> Self {
+    fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack<'a>) -> Self {
         let result = self.node(*expr.left, stack.clone());
         let (result, left) = result.pop_expr();
         let (f, can_fail) = match expr.op {
@@ -572,7 +572,7 @@ impl<'a> Transpilation<'a> {
             result.push_expr(format!("{}({}, {})", f, left, right))
         }
     }
-    fn un_expr(self, expr: UnExpr<'a>, stack: TranspileStack) -> Self {
+    fn un_expr(self, expr: UnExpr<'a>, stack: TranspileStack<'a>) -> Self {
         let result = self.node(*expr.inner, stack);
         let (result, inner) = result.pop_expr();
         let f = match expr.op {
@@ -581,7 +581,7 @@ impl<'a> Transpilation<'a> {
         };
         result.push_expr(format!("{}({})", f, inner))
     }
-    fn call_expr(self, call: CallExpr<'a>, stack: TranspileStack) -> Self {
+    fn call_expr(self, call: CallExpr<'a>, stack: TranspileStack<'a>) -> Self {
         let result = self.node(*call.expr, stack.clone());
         let (result, f) = result.pop_expr();
         let (result, params) =
@@ -606,7 +606,7 @@ impl<'a> Transpilation<'a> {
         );
         result.push_expr(call_line)
     }
-    fn insert_expr(self, expr: InsertExpr<'a>, stack: TranspileStack) -> Self {
+    fn insert_expr(self, expr: InsertExpr<'a>, stack: TranspileStack<'a>) -> Self {
         let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
         let (result, expr) =
             expr.insertions
@@ -624,7 +624,7 @@ impl<'a> Transpilation<'a> {
                 });
         result.push_expr(expr)
     }
-    fn get_expr(self, expr: GetExpr<'a>, stack: TranspileStack) -> Self {
+    fn get_expr(self, expr: GetExpr<'a>, stack: TranspileStack<'a>) -> Self {
         let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
         let (result, index) = match expr.access {
             Access::Index(term) => result.term(term, stack).pop_expr(),
@@ -635,7 +635,7 @@ impl<'a> Transpilation<'a> {
         };
         result.push_expr(format!("noot_get({}, {})", inner, index))
     }
-    fn term(self, term: Term<'a>, stack: TranspileStack) -> Self {
+    fn term(self, term: Term<'a>, stack: TranspileStack<'a>) -> Self {
         match term {
             Term::Nil => self.push_expr("NOOT_NIL".into()),
             Term::Bool(b) => self.push_expr(format!("new_bool({})", b as u8)),
@@ -647,7 +647,7 @@ impl<'a> Transpilation<'a> {
                 let c_name = self.c_name_for("anon", true);
                 let result = self.function(
                     c_name.clone(),
-                    "closure".into(),
+                    "closure",
                     closure.params,
                     closure.body,
                     stack,
@@ -663,7 +663,7 @@ impl<'a> Transpilation<'a> {
                     .noot_scopes
                     .iter()
                     .rev()
-                    .find_map(|scope| scope.get(&ident.name))
+                    .find_map(|scope| scope.get(ident.name))
                 {
                     if let Some((ident_i, value_name)) = self
                         .function_stack
@@ -734,7 +734,7 @@ impl<'a> Transpilation<'a> {
                 {
                     self.push_expr(c_name.into())
                 } else {
-                    self.error(TranspileErrorKind::UnknownDef(ident.name.clone()).span(ident.span))
+                    self.error(TranspileErrorKind::UnknownDef(ident.name).span(ident.span))
                 }
             }
         }
@@ -742,10 +742,10 @@ impl<'a> Transpilation<'a> {
     fn function(
         self,
         c_name: String,
-        noot_name: String,
+        noot_name: &'a str,
         params: Params<'a>,
         items: Items<'a>,
-        stack: TranspileStack,
+        stack: TranspileStack<'a>,
     ) -> Self {
         let result = self.start_c_function(c_name.clone(), noot_name);
         let result = result.map_c_function(|cf| {
