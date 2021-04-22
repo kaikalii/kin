@@ -231,7 +231,6 @@ impl<'a> ParseState<'a> {
         debug_pair!(pair);
         let pairs = pair.into_inner();
         let mut calls = Vec::new();
-        let mut chained = None;
         for pair in pairs {
             match pair.as_rule() {
                 Rule::expr_call_single => {
@@ -243,11 +242,9 @@ impl<'a> ParseState<'a> {
                         args: pairs
                             .map(|pair| self.term(pair).map(Node::Term))
                             .collect::<Result<_, _>>()?,
-                        chained: chained.take(),
                         span,
                     });
                 }
-                Rule::chain_call => chained = Some(pair.as_str().into()),
                 rule => unreachable!("{:?}", rule),
             }
         }

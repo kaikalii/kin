@@ -120,7 +120,6 @@ pub enum UnOp {
 pub struct CallExpr<'a> {
     pub caller: Box<Node<'a>>,
     pub args: Vec<Node<'a>>,
-    pub chained: Option<String>,
     pub span: Span<'a>,
 }
 
