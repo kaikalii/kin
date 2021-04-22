@@ -298,15 +298,8 @@ impl<'a> ParseState<'a> {
             Rule::closure => {
                 let span = pair.as_span();
                 let mut pairs = pair.into_inner();
-                pairs.next();
-                let mut params = Vec::new();
-                for pair in pairs.by_ref() {
-                    if let Rule::param = pair.as_rule() {
-                        params.push(self.param(pair));
-                    } else {
-                        break;
-                    }
-                }
+                let params_pairs = pairs.next().unwrap().into_inner();
+                let params: Vec<Param> = params_pairs.map(|pair| self.param(pair)).collect();
                 let pair = pairs.next().unwrap();
                 let body = match pair.as_rule() {
                     Rule::items => self.items(pair)?,
