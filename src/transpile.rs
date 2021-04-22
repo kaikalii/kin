@@ -659,14 +659,12 @@ impl<'a> Transpilation<'a> {
                 }
             }
             Term::Ident(ident) => {
-                dbg!(&ident.name);
                 if let Some(def) = stack
                     .noot_scopes
                     .iter()
                     .rev()
                     .find_map(|scope| scope.get(&ident.name))
                 {
-                    dbg!(&def.c_name);
                     if let Some((ident_i, value_name)) = self
                         .function_stack
                         .iter()
