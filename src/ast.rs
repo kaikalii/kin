@@ -49,8 +49,6 @@ pub enum Node<'a> {
     BinExpr(BinExpr<'a>),
     UnExpr(UnExpr<'a>),
     Call(CallExpr<'a>),
-    Insert(InsertExpr<'a>),
-    Get(GetExpr<'a>),
 }
 
 #[derive(Debug, Clone)]
@@ -120,34 +118,10 @@ pub enum UnOp {
 
 #[derive(Debug, Clone)]
 pub struct CallExpr<'a> {
-    pub expr: Box<Node<'a>>,
+    pub caller: Box<Node<'a>>,
     pub args: Vec<Node<'a>>,
     pub chained: Option<String>,
     pub span: Span<'a>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Insertion<'a> {
-    pub key: Access<'a>,
-    pub val: Node<'a>,
-}
-
-#[derive(Debug, Clone)]
-pub struct InsertExpr<'a> {
-    pub inner: Box<Node<'a>>,
-    pub insertions: Vec<Insertion<'a>>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Access<'a> {
-    Index(Term<'a>),
-    Field(Ident<'a>),
-}
-
-#[derive(Debug, Clone)]
-pub struct GetExpr<'a> {
-    pub inner: Box<Node<'a>>,
-    pub access: Access<'a>,
 }
 
 #[derive(Debug, Clone)]

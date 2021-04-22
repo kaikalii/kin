@@ -237,15 +237,12 @@ impl<'a> ParseState<'a> {
                 Rule::expr_call_single => {
                     let span = pair.as_span();
                     let mut pairs = pair.into_inner();
-                    let expr = self.expr_insert(pairs.next().unwrap())?;
-                    let mut args = Vec::new();
-                    for pair in pairs {
-                        let arg = self.expr_insert(pair)?;
-                        args.push(arg);
-                    }
+                    let caller = Node::Term(self.term(pairs.next().unwrap())?);
                     calls.push(CallExpr {
-                        expr: expr.into(),
-                        args,
+                        caller: caller.into(),
+                        args: pairs
+                            .map(|pair| self.term(pair).map(Node::Term))
+                            .collect::<Result<_, _>>()?,
                         chained: chained.take(),
                         span,
                     });
@@ -257,7 +254,7 @@ impl<'a> ParseState<'a> {
         let mut calls = calls.into_iter();
         let first_call = calls.next().unwrap();
         let mut call_node = if first_call.args.is_empty() {
-            *first_call.expr
+            *first_call.caller
         } else {
             Node::Call(first_call)
         };
@@ -266,53 +263,6 @@ impl<'a> ParseState<'a> {
             call_node = Node::Call(chained_call);
         }
         Ok(call_node)
-    }
-    fn expr_insert(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
-        debug_pair!(pair);
-        let mut pairs = pair.into_inner();
-        let inner = self.expr_get(pairs.next().unwrap())?;
-        let mut insertions = Vec::new();
-        for pair in pairs {
-            match pair.as_rule() {
-                Rule::insertion => {
-                    let mut pairs = pair.into_inner();
-                    let key = self.access(pairs.next().unwrap())?;
-                    let val = Node::Term(self.term(pairs.next().unwrap())?);
-                    insertions.push(Insertion { key, val });
-                }
-                rule => unreachable!("{:?}", rule),
-            }
-        }
-        Ok(if insertions.is_empty() {
-            inner
-        } else {
-            Node::Insert(InsertExpr {
-                inner: inner.into(),
-                insertions,
-            })
-        })
-    }
-    fn expr_get(&self, pair: Pair<'a, Rule>) -> ParseResult<Node<'a>> {
-        debug_pair!(pair);
-        let mut pairs = pair.into_inner();
-        let mut node = Node::Term(self.term(pairs.next().unwrap())?);
-        for pair in pairs {
-            let access = self.access(pair)?;
-            node = Node::Get(GetExpr {
-                inner: node.into(),
-                access,
-            })
-        }
-        Ok(node)
-    }
-    fn access(&self, pair: Pair<'a, Rule>) -> ParseResult<Access<'a>> {
-        debug_pair!(pair);
-        let pair = only(pair);
-        Ok(match pair.as_rule() {
-            Rule::ident => Access::Field(self.ident(pair)),
-            Rule::term => Access::Index(self.term(pair)?),
-            rule => unreachable!("{:?}", rule),
-        })
     }
     fn term(&self, pair: Pair<'a, Rule>) -> ParseResult<Term<'a>> {
         debug_pair!(pair);

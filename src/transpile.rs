@@ -517,8 +517,6 @@ impl<'a> Transpilation<'a> {
             Node::BinExpr(expr) => self.bin_expr(expr, stack),
             Node::UnExpr(expr) => self.un_expr(expr, stack),
             Node::Call(expr) => self.call_expr(expr, stack),
-            Node::Insert(expr) => self.insert_expr(expr, stack),
-            Node::Get(expr) => self.get_expr(expr, stack),
         }
     }
     fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack<'a>) -> Self {
@@ -582,7 +580,7 @@ impl<'a> Transpilation<'a> {
         result.push_expr(format!("{}({})", f, inner))
     }
     fn call_expr(self, call: CallExpr<'a>, stack: TranspileStack<'a>) -> Self {
-        let result = self.node(*call.expr, stack.clone());
+        let result = self.node(*call.caller, stack.clone());
         let (result, f) = result.pop_expr();
         let (result, params) =
             call.args
@@ -605,35 +603,6 @@ impl<'a> Transpilation<'a> {
             f, param_count, params, function_name, line, col
         );
         result.push_expr(call_line)
-    }
-    fn insert_expr(self, expr: InsertExpr<'a>, stack: TranspileStack<'a>) -> Self {
-        let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
-        let (result, expr) =
-            expr.insertions
-                .into_iter()
-                .fold((result, inner), |(result, inner), ins| {
-                    let (result, key) = match ins.key {
-                        Access::Index(term) => result.term(term, stack.clone()).pop_expr(),
-                        Access::Field(ident) => (
-                            result,
-                            format!("new_string({:?}, {})", ident.name, ident.name.len()),
-                        ),
-                    };
-                    let (result, val) = result.node(ins.val, stack.clone()).pop_expr();
-                    (result, format!("noot_insert({}, {}, {})", inner, key, val))
-                });
-        result.push_expr(expr)
-    }
-    fn get_expr(self, expr: GetExpr<'a>, stack: TranspileStack<'a>) -> Self {
-        let (result, inner) = self.node(*expr.inner, stack.clone()).pop_expr();
-        let (result, index) = match expr.access {
-            Access::Index(term) => result.term(term, stack).pop_expr(),
-            Access::Field(ident) => (
-                result,
-                format!("new_string({:?}, {})", ident.name, ident.name.len()),
-            ),
-        };
-        result.push_expr(format!("noot_get({}, {})", inner, index))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack<'a>) -> Self {
         match term {
