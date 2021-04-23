@@ -420,6 +420,8 @@ impl<'a> ParseState<'a> {
                 self.pop_scope();
                 Term::Closure(Closure { span, params, body }.into())
             }
+            Rule::list_literal => unimplemented!(),
+            Rule::tree_literal => unimplemented!(),
             rule => unreachable!("{:?}", rule),
         }
     }

@@ -25,6 +25,10 @@ ident_inner = @{ ident_init ~ ("_"* ~ ident_tail+)* }
 starts_with_keyword = @{ keyword ~ ("_"* ~ ident_tail+)+ }
 ident = { !keyword ~ ident_inner | starts_with_keyword | "_" }
 
+// Data structure literals
+list_literal = { "[" ~ term* ~ "]" }
+tree_literal = { "{" ~ term{3} ~ "}" }
+
 // Operators
 op_as = { "+" | "-" }
 op_mdr = { "*" | "/" | "%" }
@@ -40,7 +44,7 @@ nil = { "nil" }
 param = { ident }
 closure_params = { (param | "|" ~ param*) ~ "|" }
 closure = { closure_params ~ (NEWLINE ~ items | expr)}
-term = { real | int | closure | ident | bool_literal | nil | string | paren_expr }
+term = { real | int | closure | ident | bool_literal | nil | string | list_literal | tree_literal | paren_expr }
 expr_call_single = { term+ }
 chain_call = _{ "," ~ NEWLINE? }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* }
