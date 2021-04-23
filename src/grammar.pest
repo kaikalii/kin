@@ -3,7 +3,7 @@ ws = { WHITESPACE }
 single_line_comment = @{ "--" ~ (!NEWLINE ~ ANY)* ~ &(NEWLINE | EOI) }
 multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ ("'''" | &EOI) }
 COMMENT = _{ multi_line_comment | single_line_comment }
-keyword = { "true" | "false" | "nil" | "is" | "isnt" | "and" | "or" | "not" | "end" }
+keyword = { "true" | "false" | "nil" | "and" | "or" | "not" | "end" }
 
 // Numbers
 int = @{ ("+" | "-")? ~ ASCII_DIGIT+ }
@@ -28,7 +28,7 @@ ident = { !keyword ~ ident_inner | starts_with_keyword | "_" }
 // Operators
 op_as = { "+" | "-" }
 op_mdr = { "*" | "/" | "%" }
-op_comp = { "isnt" | "is" | "<=" | ">=" | "<" | ">" }
+op_comp = { "==" | "!=" | "<=" | ">=" | "<" | ">" }
 op_and = { "and" }
 op_or = { "or" }
 op_un = { "not" | "-" }

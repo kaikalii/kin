@@ -82,8 +82,8 @@ impl<'a> BinExpr<'a> {
 pub enum BinOp {
     Or,
     And,
-    Is,
-    Isnt,
+    Equals,
+    NotEquals,
     Less,
     LessOrEqual,
     Greater,

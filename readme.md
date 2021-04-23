@@ -167,7 +167,7 @@ filter (x| x % 3 == 0),
 println
 ```
 
-## **error**
+### **error**
 
 An value that represents a failue in some process. It contains an inner value.
 
@@ -175,6 +175,42 @@ An value that represents a failue in some process. It contains an inner value.
 e = err "Something went wrong!"
 
 message = get_err e
+```
+
+## Operators
+
+### Arithmetic Operators
+
+Noot has 5 binary arthimetic operators `+`, `-`, `*`, `/`, and `%` and 1 unary arithmetic operator `-`.
+
+These operators only work on int and real values.
+
+```
+1 + 2 -- 3
+2 - 1 -- 1
+2 * 3 -- 6
+12 / 3 -- 4
+12 / 5 -- 2
+12.0 / 5 -- 2.4
+13 % 3 -- 1
+13 % 3.5 -- 2.5
+-(1 - 2) -- 1
+```
+
+### Comparison Operators
+
+
+Noot has 6 binary comparison operators `==`, `!=`, `<`, `>`, `<=`, and `>=` and an inversion operator `not`.
+
+`==`, `!=`, and `not` work on values of all types. Inequality operators only work on int and real types.
+
+```
+1 < 2 -- true
+2 < 2 -- false,
+2 <= 2 -- true
+1 == 1 -- true
+1 == "hi" -- false
+1 < "hi" -- runtime panic
 ```
 
 ## Control Flow

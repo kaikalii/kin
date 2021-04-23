@@ -153,8 +153,8 @@ impl<'a> ParseState<'a> {
         for (op, right) in pairs.tuples() {
             let op_span = op.as_span();
             let op = match op.as_str() {
-                "is" => BinOp::Is,
-                "isnt" => BinOp::Isnt,
+                "==" => BinOp::Equals,
+                "!=" => BinOp::NotEquals,
                 "<=" => BinOp::LessOrEqual,
                 ">=" => BinOp::GreaterOrEqual,
                 "<" => BinOp::Less,

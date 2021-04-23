@@ -544,8 +544,8 @@ impl<'a> Transpilation<'a> {
                         .push_expr(temp_name)
                 });
             }
-            BinOp::Is => ("noot_eq", false),
-            BinOp::Isnt => ("noot_neq", false),
+            BinOp::Equals => ("noot_eq", false),
+            BinOp::NotEquals => ("noot_neq", false),
             BinOp::Less => ("noot_lt", true),
             BinOp::LessOrEqual => ("noot_le", true),
             BinOp::Greater => ("noot_gt", true),
