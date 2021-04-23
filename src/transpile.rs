@@ -1,48 +1,14 @@
 use std::{
-    fmt,
     fs::{self, File},
     io::{self, Write},
     iter::once,
+    rc::Rc,
 };
 
 use itertools::*;
-use pest::{
-    error::{Error as PestError, ErrorVariant},
-    Span,
-};
-use rpds::{List, Queue, RedBlackTreeMap, Vector};
+use rpds::{Queue, RedBlackTreeMap, Vector};
 
-use crate::{ast::*, parse::Rule};
-
-#[derive(Debug, thiserror::Error)]
-pub enum TranspileErrorKind<'a> {
-    #[error("Unknown definition {0}")]
-    UnknownDef(&'a str),
-}
-
-impl<'a> TranspileErrorKind<'a> {
-    pub fn span(self, span: Span<'a>) -> TranspileError {
-        TranspileError { kind: self, span }
-    }
-}
-
-#[derive(Debug)]
-pub struct TranspileError<'a> {
-    pub kind: TranspileErrorKind<'a>,
-    pub span: Span<'a>,
-}
-
-impl<'a> fmt::Display for TranspileError<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let error = PestError::<Rule>::new_from_span(
-            ErrorVariant::CustomError {
-                message: self.kind.to_string(),
-            },
-            self.span.clone(),
-        );
-        write!(f, "{}", error)
-    }
-}
+use crate::ast::*;
 
 struct NootDef {
     is_function: bool,
@@ -149,7 +115,6 @@ impl<'a> TranspileStack<'a> {
 pub struct Transpilation<'a> {
     functions: RedBlackTreeMap<String, CFunction<'a>>,
     function_stack: Vector<String>,
-    pub errors: List<TranspileError<'a>>,
 }
 
 #[derive(Clone)]
@@ -271,7 +236,6 @@ impl<'a> Transpilation<'a> {
                 .map(|name| (name.into(), CFunction::new(name)))
                 .collect(),
             function_stack: once("main".into()).collect(),
-            errors: Default::default(),
         }
     }
     pub fn write(self) -> io::Result<()> {
@@ -377,7 +341,6 @@ impl<'a> Transpilation<'a> {
                 .functions
                 .insert(c_name.clone(), CFunction::new(noot_name)),
             function_stack: self.function_stack.push_back(c_name),
-            ..self
         }
     }
     fn finish_c_function(self) -> Self {
@@ -433,12 +396,6 @@ impl<'a> Transpilation<'a> {
         });
         (result, expr.unwrap_or_else(|| "NOOT_NIL".into()))
     }
-    fn error(self, error: TranspileError<'a>) -> Self {
-        Transpilation {
-            errors: self.errors.push_front(error),
-            ..self
-        }
-    }
     fn items(self, items: Items<'a>, stack: TranspileStack<'a>) -> Self {
         let item_count = items.len();
         items
@@ -468,7 +425,7 @@ impl<'a> Transpilation<'a> {
 
     fn item(self, item: Item<'a>, stack: TranspileStack<'a>) -> (Self, TranspileStack<'a>) {
         match item {
-            Item::Def(def) => self.def(def, stack),
+            Item::Def(def) => self.def(Rc::try_unwrap(def).unwrap(), stack),
             Item::Node(node) => {
                 let result = self.node(node, stack.clone());
                 (result, stack)
@@ -703,7 +660,7 @@ impl<'a> Transpilation<'a> {
                 {
                     self.push_expr(c_name.into())
                 } else {
-                    self.error(TranspileErrorKind::UnknownDef(ident.name).span(ident.span))
+                    panic!("Unknown def not resolved: {:?}", ident.name)
                 }
             }
         }

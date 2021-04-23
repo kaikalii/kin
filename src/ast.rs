@@ -1,4 +1,6 @@
-#![allow(clippy::upper_case_acronyms, dead_code)]
+#![allow(clippy::upper_case_acronyms)]
+
+use std::rc::Rc;
 
 use pest::Span;
 
@@ -18,7 +20,7 @@ impl<'a> Eq for Ident<'a> {}
 #[derive(Debug, Clone)]
 pub enum Item<'a> {
     Node(Node<'a>),
-    Def(Def<'a>),
+    Def(Rc<Def<'a>>),
 }
 
 pub type Items<'a> = Vec<Item<'a>>;
