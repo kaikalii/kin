@@ -82,16 +82,25 @@ pub fn parse(input: &str) -> Result<Items, Vec<TranspileError>> {
     }
 }
 
+#[derive(Clone)]
+enum Binding<'a> {
+    Def(Rc<Def<'a>>),
+    Param,
+}
+
 #[derive(Default)]
 struct Scope<'a> {
-    bindings: UnsafeCell<HashMap<&'a str, Rc<Def<'a>>>>,
+    bindings: UnsafeCell<HashMap<&'a str, Binding<'a>>>,
 }
 
 impl<'a> Scope<'a> {
-    fn bind(&self, def: Def<'a>) -> Rc<Def<'a>> {
+    fn bind_def(&self, def: Def<'a>) -> Rc<Def<'a>> {
         let def = Rc::new(def);
-        unsafe { &mut *self.bindings.get() }.insert(def.ident.name, def.clone());
+        unsafe { &mut *self.bindings.get() }.insert(def.ident.name, Binding::Def(def.clone()));
         def
+    }
+    fn bind_param(&self, name: &'a str) {
+        unsafe { &mut *self.bindings.get() }.insert(name, Binding::Param);
     }
 }
 
@@ -111,7 +120,7 @@ impl<'a> ParseState<'a> {
     fn scope(&self) -> &Scope<'a> {
         unsafe { &*self.scopes.get() }.last().unwrap()
     }
-    fn find_binding(&self, name: &str) -> Option<Rc<Def<'a>>> {
+    fn find_binding(&self, name: &str) -> Option<Binding<'a>> {
         unsafe { &*self.scopes.get() }
             .iter()
             .rev()
@@ -164,18 +173,28 @@ impl<'a> ParseState<'a> {
                 break;
             }
         }
+        let is_function = !params.is_empty();
+        if is_function {
+            self.push_scope();
+            for param in &params {
+                self.scope().bind_param(param.ident.name);
+            }
+        }
         let pair = pairs.next().unwrap();
         let items = match pair.as_rule() {
             Rule::items => self.items(pair),
             Rule::expr => vec![Item::Node(self.expr(pair))],
             rule => unreachable!("{:?}", rule),
         };
+        if is_function {
+            self.pop_scope();
+        }
         let def = Def {
             ident,
             params,
             items,
         };
-        self.scope().bind(def)
+        self.scope().bind_def(def)
     }
     fn expr(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
         debug_pair!(pair);
@@ -367,7 +386,9 @@ impl<'a> ParseState<'a> {
             }
             Rule::paren_expr => {
                 let pair = only(pair);
+                self.push_scope();
                 let items = self.items(pair);
+                self.pop_scope();
                 Term::Expr(items)
             }
             Rule::string => {
