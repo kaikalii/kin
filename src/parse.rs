@@ -42,13 +42,6 @@ fn format_span(message: impl Into<String>, span: Span, f: &mut fmt::Formatter) -
     write!(f, "{}", error)
 }
 
-macro_rules! debug_pair {
-    ($pair:expr) => {
-        #[cfg(feature = "debug")]
-        println!("{:?}: {}", $pair.as_rule(), $pair.as_str());
-    };
-}
-
 fn only<R>(pair: Pair<R>) -> Pair<R>
 where
     R: RuleType,
@@ -64,7 +57,12 @@ pub fn parse(input: &str) -> Result<Items, Vec<TranspileError>> {
     match NootParser::parse(Rule::file, input) {
         Ok(mut pairs) => {
             let default_scope = Scope {
-                bindings: UnsafeCell::new(HashMap::new()),
+                bindings: UnsafeCell::new(
+                    crate::transpile::BUILTIN_FUNCTIONS
+                        .iter()
+                        .map(|&(name, _)| (name, Binding::Builtin))
+                        .collect(),
+                ),
             };
             let mut state = ParseState {
                 input,
@@ -82,10 +80,12 @@ pub fn parse(input: &str) -> Result<Items, Vec<TranspileError>> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum Binding<'a> {
     Def(Rc<Def<'a>>),
     Param,
+    Builtin,
+    Unfinished,
 }
 
 #[derive(Default)]
@@ -95,12 +95,24 @@ struct Scope<'a> {
 
 impl<'a> Scope<'a> {
     fn bind_def(&self, def: Def<'a>) -> Rc<Def<'a>> {
+        #[cfg(feature = "debug")]
+        println!("bind {:?}", def.ident.name);
         let def = Rc::new(def);
         unsafe { &mut *self.bindings.get() }.insert(def.ident.name, Binding::Def(def.clone()));
         def
     }
     fn bind_param(&self, name: &'a str) {
         unsafe { &mut *self.bindings.get() }.insert(name, Binding::Param);
+    }
+    fn bind_unfinished(&self, name: &'a str) {
+        unsafe { &mut *self.bindings.get() }.insert(name, Binding::Unfinished);
+    }
+    #[cfg(feature = "debug")]
+    fn print_keys(&self) {
+        println!(
+            "{:#?}",
+            unsafe { &*self.bindings.get() }.keys().collect::<Vec<_>>()
+        );
     }
 }
 
@@ -112,15 +124,21 @@ struct ParseState<'a> {
 
 impl<'a> ParseState<'a> {
     fn push_scope(&self) {
+        #[cfg(feature = "debug")]
+        println!("push scope");
         unsafe { &mut *self.scopes.get() }.push(Scope::default());
     }
     fn pop_scope(&self) {
+        #[cfg(feature = "debug")]
+        println!("pop scope");
         unsafe { &mut *self.scopes.get() }.pop();
     }
     fn scope(&self) -> &Scope<'a> {
         unsafe { &*self.scopes.get() }.last().unwrap()
     }
     fn find_binding(&self, name: &str) -> Option<Binding<'a>> {
+        #[cfg(feature = "debug")]
+        println!("lookup {:?}", name);
         unsafe { &*self.scopes.get() }
             .iter()
             .rev()
@@ -130,7 +148,6 @@ impl<'a> ParseState<'a> {
         Span::new(self.input, start, end).unwrap()
     }
     fn items(&mut self, pair: Pair<'a, Rule>) -> Items<'a> {
-        debug_pair!(pair);
         let mut items = Vec::new();
         for pair in pair.into_inner() {
             match pair.as_rule() {
@@ -142,7 +159,6 @@ impl<'a> ParseState<'a> {
         items
     }
     fn item(&mut self, pair: Pair<'a, Rule>) -> Item<'a> {
-        debug_pair!(pair);
         let pair = only(pair);
         match pair.as_rule() {
             Rule::expr => Item::Node(self.expr(pair)),
@@ -162,7 +178,6 @@ impl<'a> ParseState<'a> {
         Param { ident }
     }
     fn def(&mut self, pair: Pair<'a, Rule>) -> Rc<Def<'a>> {
-        debug_pair!(pair);
         let mut pairs = pair.into_inner();
         let ident = self.ident(pairs.next().unwrap());
         let mut params = Vec::new();
@@ -175,6 +190,7 @@ impl<'a> ParseState<'a> {
         }
         let is_function = !params.is_empty();
         if is_function {
+            self.scope().bind_unfinished(ident.name);
             self.push_scope();
             for param in &params {
                 self.scope().bind_param(param.ident.name);
@@ -197,7 +213,6 @@ impl<'a> ParseState<'a> {
         self.scope().bind_def(def)
     }
     fn expr(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
-        debug_pair!(pair);
         let pair = only(pair);
         match pair.as_rule() {
             Rule::expr_or => self.expr_or(pair),
@@ -205,7 +220,6 @@ impl<'a> ParseState<'a> {
         }
     }
     fn expr_or(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
-        debug_pair!(pair);
         let mut pairs = pair.into_inner();
         let left = pairs.next().unwrap();
         let mut span = left.as_span();
@@ -223,7 +237,6 @@ impl<'a> ParseState<'a> {
         left
     }
     fn expr_and(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
-        debug_pair!(pair);
         let mut pairs = pair.into_inner();
         let left = pairs.next().unwrap();
         let mut span = left.as_span();
@@ -241,7 +254,6 @@ impl<'a> ParseState<'a> {
         left
     }
     fn expr_cmp(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
-        debug_pair!(pair);
         let mut pairs = pair.into_inner();
         let left = pairs.next().unwrap();
         let mut span = left.as_span();
@@ -264,7 +276,6 @@ impl<'a> ParseState<'a> {
         left
     }
     fn expr_as(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
-        debug_pair!(pair);
         let mut pairs = pair.into_inner();
         let left = pairs.next().unwrap();
         let mut span = left.as_span();
@@ -283,7 +294,6 @@ impl<'a> ParseState<'a> {
         left
     }
     fn expr_mdr(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
-        debug_pair!(pair);
         let mut pairs = pair.into_inner();
         let left = pairs.next().unwrap();
         let mut span = left.as_span();
@@ -303,7 +313,6 @@ impl<'a> ParseState<'a> {
         left
     }
     fn expr_not(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
-        debug_pair!(pair);
         let mut pairs = pair.into_inner();
         let first = pairs.next().unwrap();
         let op = match first.as_str() {
@@ -324,7 +333,6 @@ impl<'a> ParseState<'a> {
         }
     }
     fn expr_call(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
-        debug_pair!(pair);
         let pairs = pair.into_inner();
         let mut calls = Vec::new();
         for pair in pairs {
@@ -356,7 +364,6 @@ impl<'a> ParseState<'a> {
         call_node
     }
     fn term(&mut self, pair: Pair<'a, Rule>) -> Term<'a> {
-        debug_pair!(pair);
         let pair = only(pair);
         match pair.as_rule() {
             Rule::int => match pair.as_str().parse::<i64>() {
@@ -412,7 +419,6 @@ impl<'a> ParseState<'a> {
         }
     }
     fn string_literal(&mut self, pair: Pair<'a, Rule>) -> String {
-        debug_pair!(pair);
         let mut s = String::new();
         for pair in pair.into_inner() {
             match pair.as_rule() {
