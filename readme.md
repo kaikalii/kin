@@ -91,13 +91,13 @@ hello_world = "👋🏼🌎"
 An immutable singly-linked list of values
 
 ```
-xs = (1 2 3)
+xs = [1 2 3]
 
 -- Lists can be composed and decomposed with the `:` operator
 
-head:tail = xs -- head = 1, tail = (2 3)
+head:tail = xs -- head = 1, tail = [2 3]
 
-xs = 4:xs -- (4 1 2 3)
+xs = 4:xs -- [4 1 2 3]
 ```
 
 ### **tree**
@@ -105,9 +105,9 @@ xs = 4:xs -- (4 1 2 3)
 An immutable tree node with an inner value as well as left and right child values.
 
 ```
-a = [1 2 3] -- inner = 2, left = 1, right = 3
+a = {1 2 3} -- inner = 2, left = 1, right = 3
 
-b = [a 4 [5 6 7]]
+b = {a 4 {5 6 7}}
 '''
 b = 
      4
@@ -117,7 +117,7 @@ b =
 1   3 5   7
 '''
 
-[_ _ right_tree] = b -- right_tree = [5 6 7]
+{_ _ right_tree} = b -- right_tree = {5 6 7}
 ```
 
 ### **function**
