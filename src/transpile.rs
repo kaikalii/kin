@@ -22,7 +22,7 @@ macro_rules! builtin_functions {
 }
 
 pub const BUILTIN_FUNCTIONS: &[(&str, &str)] =
-    builtin_functions!("print", "println", "len", "list", "error", "panic");
+    builtin_functions!("print", "println", "error", "panic");
 const BUILTIN_VALUES: &[(&str, &str)] = &[("table", "NOOT_EMPTY_TABLE")];
 
 static RESERVED_NAMES: &[&str] = &[
@@ -244,7 +244,6 @@ impl<'a> Transpilation<'a> {
 
         // Write headers
         writeln!(source, "#include \"../clibs/noot.h\"")?;
-        writeln!(source, "#include \"../clibs/tgc.h\"")?;
         writeln!(source)?;
 
         // Write function declarations
@@ -271,7 +270,6 @@ impl<'a> Transpilation<'a> {
             // Write signature
             if main {
                 writeln!(source, "int main(int argc, char** argv) {{")?;
-                writeln!(source, "    tgc_start(&noot_gc, &argc);")?;
             } else if cf.captures.is_empty() {
                 writeln!(
                     source,
@@ -303,7 +301,6 @@ impl<'a> Transpilation<'a> {
                 if let (_, Some(expr)) = cf.clone().pop_expr() {
                     writeln!(source, "    {};", expr)?;
                 }
-                writeln!(source, "    tgc_stop(&noot_gc);")?;
                 writeln!(source, "    return 0;")?;
             }
             // Close function
@@ -705,11 +702,7 @@ impl<'a> Transpilation<'a> {
             let captures_name = format!("{}_captures", c_name);
             let closure_name = format!("{}_closure", c_name);
             let result = result.map_c_function(|cf| {
-                cf.with_raw_line(format!(
-                    "NootValue* {} = (NootValue*)tgc_alloc(&noot_gc, {} * sizeof(NootValue));",
-                    captures_name,
-                    captures.len()
-                ))
+                cf.with_raw_line(format!("NootValue {}[{}];", captures_name, captures.len()))
             });
             captures
                 .iter()

@@ -4,11 +4,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 #include "utf8.h"
-#include "tgc.h"
-
-// The garbage collector
-static tgc_t noot_gc;
 
 static char** noot_call_stack = NULL;
 static size_t noot_call_stack_len = 0;
@@ -74,6 +71,7 @@ static char* noot_type_names[] = {
 // Foward declarations
 
 typedef struct NootValue NootValue;
+typedef struct NootList NootList;
 typedef struct NootListEntry NootListEntry;
 typedef struct NootTableEntry NootTableEntry;
 
@@ -83,17 +81,10 @@ typedef NootValue(*NootFn)(uint8_t, NootValue* args);
 typedef NootValue(*NootClosureFn)(uint8_t, NootValue* args, NootValue* captures);
 
 // A Noot closure
-typedef struct NootClosure {
+typedef struct NootFunction {
     NootValue* captures;
     NootClosureFn f;
-} NootClosure;
-
-// The shared part of a Noot List
-typedef struct NootListShared {
-    size_t capacity;
-    NootListEntry* buffer;
-    int next_id;
-} NootListShared;
+} NootFunction;
 
 // The shared part of a Noot table
 typedef struct NootTableShared {
@@ -101,13 +92,6 @@ typedef struct NootTableShared {
     NootTableEntry** buffer;
     int next_id;
 } NootTableShared;
-
-// A Noot list
-typedef struct NootList {
-    int id;
-    size_t len;
-    NootListShared* shared;
-} NootList;
 
 // A Noot table
 typedef struct NootTable {
@@ -124,8 +108,8 @@ typedef union NootData {
     double Real;
     NootString String;
     NootFn Function;
-    NootClosure Closure;
-    NootList List;
+    NootFunction Closure;
+    NootList* List;
     NootTable Table;
     struct NootValue* Error;
 } NootData;
@@ -135,6 +119,12 @@ struct NootValue {
     NootType type;
     NootData data;
 };
+
+// A Noot list
+typedef struct NootList {
+    NootValue head;
+    NootValue* next;
+} NootList;
 
 // The entry of Noot lists
 typedef struct NootListEntry {
@@ -152,12 +142,6 @@ typedef struct NootTableEntry {
 
 // The nil Noot value
 const NootValue NOOT_NIL = { .type = Nil };
-
-// An empty Noot list
-const NootValue NOOT_EMPTY_LIST = {
-    .type = List,
-    .data = {.List = {.id = 0, .len = 0, .shared = NULL }},
-};
 
 // An empty Noot table
 const NootValue NOOT_EMPTY_TABLE = {
@@ -190,8 +174,7 @@ void noot_unary_type_panic(char* message, NootType ty) {
 // Create a new Noot error from a value
 NootValue noot_error(uint8_t count, NootValue* inner) {
     NootValue val = { .type = Error };
-    val.data.Error = (NootValue*)tgc_alloc(&noot_gc, sizeof(NootValue));
-    *val.data.Error = inner ? *inner : NOOT_NIL;
+    val.data.Error = inner;
     return val;
 }
 
@@ -210,14 +193,6 @@ NootValue noot_call(NootValue val, int count, NootValue* args, char* call_site) 
         return res;
     }
     noot_unary_type_panic("Attempted to call %s value", val.type);
-}
-
-NootValue noot_list_get(NootList list, int i) {
-    if (i < 0 || i >= list.len) return NOOT_NIL;
-    NootListEntry* buffer = list.shared->buffer;
-    NootListEntry entry = buffer[i];
-    while (entry.id > list.id) entry = *entry.next;
-    return entry.val;
 }
 
 NootValue noot_print(uint8_t count, NootValue* args) {
@@ -247,12 +222,14 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         printf("%*.*s", len, len, val.data.String.s);
         break;
     case List:;
-        NootList list = val.data.List;
         printf("[");
-        for (int i = 0; i < list.len; i++) {
-            if (i > 0) printf(" ");
-            NootValue item = noot_list_get(list, i);
-            noot_print(1, &item);
+        bool printed = false;
+        NootValue* curr = &val;
+        while (curr->type == List && curr->data.List) {
+            if (printed) printf(" ");
+            noot_print(1, &curr->data.List->head);
+            printed = true;
+            curr = curr->data.List->next;
         }
         printf("]");
         break;
@@ -304,20 +281,6 @@ NootValue noot_panic(uint8_t count, NootValue* args) {
     printf("\nNoot panicked:\n");
     noot_println(count, args);
     noot_panic_impl("");
-}
-
-NootValue noot_list(uint8_t count, NootValue* values) {
-    NootValue val = NOOT_EMPTY_LIST;
-    val.data.List.shared = (NootListShared*)tgc_calloc(&noot_gc, 1, sizeof(NootListShared));
-    val.data.List.shared->buffer = (NootListEntry*)tgc_calloc(&noot_gc, count, count * sizeof(NootListEntry));
-    NootListShared* shared = val.data.List.shared;
-    shared->capacity = count;
-    val.data.List.len = count;
-    NootListEntry* buffer = shared->buffer;
-    for (uint8_t i = 0; i < count; i++) {
-        buffer[i].val = values[i];
-    }
-    return val;
 }
 
 NootValue noot_call_bin_op(NootValue f(NootValue, NootValue), NootValue a, NootValue b, char* call_site) {
