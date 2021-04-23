@@ -407,12 +407,17 @@ impl<'a> ParseState<'a> {
                 let mut pairs = pair.into_inner();
                 let params_pairs = pairs.next().unwrap().into_inner();
                 let params: Vec<Param> = params_pairs.map(|pair| self.param(pair)).collect();
+                self.push_scope();
+                for param in &params {
+                    self.scope().bind_param(param.ident.name);
+                }
                 let pair = pairs.next().unwrap();
                 let body = match pair.as_rule() {
                     Rule::items => self.items(pair),
                     Rule::expr => vec![Item::Node(self.expr(pair))],
                     rule => unreachable!("{:?}", rule),
                 };
+                self.pop_scope();
                 Term::Closure(Closure { span, params, body }.into())
             }
             rule => unreachable!("{:?}", rule),
