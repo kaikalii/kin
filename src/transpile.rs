@@ -600,7 +600,6 @@ impl<'a> Transpilation<'a> {
                 let (result, expr) = terms.into_iter().rev().fold(
                     (self, "NOOT_NIL".to_owned()),
                     |(result, tail), term| {
-                        // let is_ident = matches!(term, Term::Ident(_));
                         let (result, expr) = result.term(term, stack.clone()).pop_expr();
                         let item = result.c_name_for("item", false);
                         let result = result.map_c_function(|cf| {
