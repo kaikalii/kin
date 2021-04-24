@@ -142,6 +142,7 @@ impl<'a> CFunction<'a> {
 
 struct CLine {
     var_name: Option<String>,
+    type_name: &'static str,
     value: String,
     indent: usize,
     semicolon: bool,
@@ -157,6 +158,19 @@ impl<'a> CFunction<'a> {
         CFunction {
             lines: self.lines.push_back(CLine {
                 var_name,
+                type_name: "NootValue",
+                value,
+                indent: self.indent,
+                semicolon: true,
+            }),
+            ..self
+        }
+    }
+    pub fn with_typed_line(self, var_name: String, type_name: &'static str, value: String) -> Self {
+        CFunction {
+            lines: self.lines.push_back(CLine {
+                var_name: Some(var_name),
+                type_name,
                 value,
                 indent: self.indent,
                 semicolon: true,
@@ -168,6 +182,7 @@ impl<'a> CFunction<'a> {
         CFunction {
             lines: self.lines.push_back(CLine {
                 var_name: None,
+                type_name: "NootValue",
                 value,
                 indent: self.indent,
                 semicolon: false,
@@ -287,7 +302,7 @@ impl<'a> Transpilation<'a> {
             for line in &cf.lines {
                 write!(source, "{:indent$}", "", indent = (line.indent + 1) * 4)?;
                 if let Some(var_name) = &line.var_name {
-                    write!(source, "NootValue {} = ", var_name)?;
+                    write!(source, "{} {} = ", line.type_name, var_name)?;
                 }
                 writeln!(
                     source,
@@ -581,6 +596,29 @@ impl<'a> Transpilation<'a> {
                     result.push_expr(format!("{}_closure", c_name))
                 }
             }
+            Term::List(terms) => {
+                let (result, expr) = terms.into_iter().rev().fold(
+                    (self, "NOOT_NIL".to_owned()),
+                    |(result, tail), term| {
+                        // let is_ident = matches!(term, Term::Ident(_));
+                        let (result, expr) = result.term(term, stack.clone()).pop_expr();
+                        let item = result.c_name_for("item", false);
+                        let result = result.map_c_function(|cf| {
+                            cf.with_typed_line(
+                                item.clone(),
+                                "NootList",
+                                format!("{{ .head = {}, .tail = {} }}", expr, tail),
+                            )
+                        });
+                        (
+                            result,
+                            format!("{{ .type = List, .data = {{ .List = &{} }} }}", item),
+                        )
+                    },
+                );
+                result.push_expr(expr)
+            }
+            Term::Tree(_) => unimplemented!(),
             Term::Ident(ident) => {
                 if let Some(def) = stack
                     .noot_scopes

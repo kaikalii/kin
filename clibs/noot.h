@@ -123,7 +123,7 @@ struct NootValue {
 // A Noot list
 typedef struct NootList {
     NootValue head;
-    NootValue* next;
+    NootValue tail;
 } NootList;
 
 // The entry of Noot lists
@@ -229,7 +229,7 @@ NootValue noot_print(uint8_t count, NootValue* args) {
             if (printed) printf(" ");
             noot_print(1, &curr->data.List->head);
             printed = true;
-            curr = curr->data.List->next;
+            curr = &curr->data.List->tail;
         }
         printf("]");
         break;

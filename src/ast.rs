@@ -133,6 +133,8 @@ pub enum Term<'a> {
     Ident(Ident<'a>),
     Bool(bool),
     String(String),
+    List(Vec<Term<'a>>),
+    Tree(Box<[Term<'a>; 3]>),
     Closure(Box<Closure<'a>>),
     Nil,
 }

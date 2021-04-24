@@ -420,8 +420,17 @@ impl<'a> ParseState<'a> {
                 self.pop_scope();
                 Term::Closure(Closure { span, params, body }.into())
             }
-            Rule::list_literal => unimplemented!(),
-            Rule::tree_literal => unimplemented!(),
+            Rule::list_literal => {
+                Term::List(pair.into_inner().map(|pair| self.term(pair)).collect())
+            }
+            Rule::tree_literal => {
+                let mut pairs = pair.into_inner();
+                Term::Tree(Box::new([
+                    self.term(pairs.next().unwrap()),
+                    self.term(pairs.next().unwrap()),
+                    self.term(pairs.next().unwrap()),
+                ]))
+            }
             rule => unreachable!("{:?}", rule),
         }
     }

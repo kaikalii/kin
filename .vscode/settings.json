@@ -4,5 +4,10 @@
     ],
     "spellright.documentTypes": [
         "latex"
-    ]
+    ],
+    "files.associations": {
+        "type_traits": "cpp",
+        "xtr1common": "cpp",
+        "xutility": "cpp"
+    }
 }
