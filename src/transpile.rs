@@ -23,6 +23,7 @@ macro_rules! builtin_functions {
 pub const BUILTIN_FUNCTIONS: &[(&str, &str)] =
     builtin_functions!("print", "println", "error", "panic", "not");
 pub const BUILTIN_VALUES: &[(&str, &str)] = &[
+    ("_", "NOOT_NIL"),
     ("nil", "NOOT_NIL"),
     ("true", "NOOT_TRUE"),
     ("false", "NOOT_FALSE"),
