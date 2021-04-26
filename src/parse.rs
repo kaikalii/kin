@@ -18,6 +18,7 @@ pub enum TranspileError<'a> {
     InvalidLiteral(Span<'a>),
     DefUnderscoreTerminus(Span<'a>),
     FunctionNamedUnderscore(Span<'a>),
+    ReturnReferencesLocal(Span<'a>),
 }
 
 impl<'a> fmt::Display for TranspileError<'a> {
@@ -35,6 +36,9 @@ impl<'a> fmt::Display for TranspileError<'a> {
             }
             TranspileError::FunctionNamedUnderscore(span) => {
                 format_span("Function cannot be named '_'", span.clone(), f)
+            }
+            TranspileError::ReturnReferencesLocal(span) => {
+                format_span("Return value references local value", span.clone(), f)
             }
         }
     }
@@ -88,10 +92,19 @@ pub fn parse(input: &str) -> Result<Items, Vec<TranspileError>> {
 
 #[derive(Debug, Clone)]
 enum Binding<'a> {
-    Def(Def<'a>),
-    Param,
+    Def(Def<'a>, usize),
+    Param(usize),
     Builtin,
-    Unfinished,
+    Unfinished(usize),
+}
+
+impl<'a> Binding<'a> {
+    pub fn depth(&self) -> usize {
+        match self {
+            Binding::Def(_, depth) | Binding::Param(depth) | Binding::Unfinished(depth) => *depth,
+            Binding::Builtin => 0,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -100,17 +113,6 @@ struct Scope<'a> {
 }
 
 impl<'a> Scope<'a> {
-    fn bind_def(&mut self, def: Def<'a>) {
-        #[cfg(feature = "debug")]
-        println!("bind {:?}", def.ident.name);
-        self.bindings.insert(def.ident.name, Binding::Def(def));
-    }
-    fn bind_param(&mut self, name: &'a str) {
-        self.bindings.insert(name, Binding::Param);
-    }
-    fn bind_unfinished(&mut self, name: &'a str) {
-        self.bindings.insert(name, Binding::Unfinished);
-    }
     #[cfg(feature = "debug")]
     fn print_keys(&self) {
         println!(
@@ -151,6 +153,26 @@ impl<'a> ParseState<'a> {
     fn span(&self, start: usize, end: usize) -> Span<'a> {
         Span::new(self.input, start, end).unwrap()
     }
+    fn depth(&self) -> usize {
+        self.scopes.len()
+    }
+
+    fn bind_def(&mut self, def: Def<'a>) {
+        let depth = self.depth();
+        self.scope()
+            .bindings
+            .insert(def.ident.name, Binding::Def(def, depth));
+    }
+    fn bind_param(&mut self, name: &'a str) {
+        let depth = self.depth() - 1;
+        self.scope().bindings.insert(name, Binding::Param(depth));
+    }
+    fn bind_unfinished(&mut self, name: &'a str) {
+        let depth = self.depth();
+        self.scope()
+            .bindings
+            .insert(name, Binding::Unfinished(depth));
+    }
     fn items(&mut self, pair: Pair<'a, Rule>) -> Items<'a> {
         let mut items = Vec::new();
         for pair in pair.into_inner() {
@@ -158,6 +180,14 @@ impl<'a> ParseState<'a> {
                 Rule::item => items.push(self.item(pair)),
                 Rule::EOI => {}
                 rule => unreachable!("{:?}", rule),
+            }
+        }
+        if let Item::Node(node) = items.last().unwrap() {
+            let depth = self.depth();
+            if depth > 1 && node.scope == depth {
+                self.errors.push(TranspileError::ReturnReferencesLocal(
+                    node.kind.span().clone(),
+                ))
             }
         }
         items
@@ -201,29 +231,26 @@ impl<'a> ParseState<'a> {
                 self.errors
                     .push(TranspileError::FunctionNamedUnderscore(ident.span.clone()));
             }
-            self.scope().bind_unfinished(ident.name);
+            self.bind_unfinished(ident.name);
             self.push_scope();
             for param in &params {
-                self.scope().bind_param(param.ident.name);
+                self.bind_param(param.ident.name);
             }
         }
         let pair = pairs.next().unwrap();
-        let items = match pair.as_rule() {
-            Rule::items => self.items(pair),
-            Rule::expr => vec![Item::Node(self.expr(pair))],
-            rule => unreachable!("{:?}", rule),
-        };
+        let items_span = pair.as_span();
+        let items = self.function_body(pair);
         if is_function {
             self.pop_scope();
         } else if ident.is_underscore() {
-            return Item::Node(Node::Term(Term::Expr(items)));
+            return Item::Node(NodeKind::Term(Term::Expr(items), items_span).scope(self.depth()));
         }
         let def = Def {
             ident,
             params,
             items,
         };
-        self.scope().bind_def(def.clone());
+        self.bind_def(def.clone());
         Item::Def(def)
     }
     fn expr(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
@@ -246,7 +273,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_and(right);
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
+            let scope = left.scope.max(right.scope);
+            left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
+                .scope(scope);
         }
         left
     }
@@ -263,7 +292,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_cmp(right);
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
+            let scope = left.scope.max(right.scope);
+            left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
+                .scope(scope);
         }
         left
     }
@@ -285,7 +316,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_as(right);
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
+            let scope = left.scope.max(right.scope);
+            left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
+                .scope(scope);
         }
         left
     }
@@ -303,7 +336,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_mdr(right);
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
+            let scope = left.scope.max(right.scope);
+            left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
+                .scope(scope);
         }
         left
     }
@@ -322,11 +357,14 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_not(right);
-            left = Node::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span));
+            let scope = left.scope.max(right.scope);
+            left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
+                .scope(scope);
         }
         left
     }
     fn expr_not(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
+        let span = pair.as_span();
         let mut pairs = pair.into_inner();
         let first = pairs.next().unwrap();
         let op = match first.as_str() {
@@ -341,7 +379,8 @@ impl<'a> ParseState<'a> {
         };
         let inner = self.expr_call(inner);
         if let Some(op) = op {
-            Node::UnExpr(UnExpr::new(inner, op))
+            let scope = inner.scope;
+            NodeKind::UnExpr(UnExpr::new(inner, op, span)).scope(scope)
         } else {
             inner
         }
@@ -369,64 +408,72 @@ impl<'a> ParseState<'a> {
         let mut call_node = if first_call.args.is_empty() {
             *first_call.caller
         } else {
-            Node::Call(first_call)
+            NodeKind::Call(first_call).scope(self.depth())
         };
         for mut chained_call in calls {
             chained_call.args.insert(0, call_node);
-            call_node = Node::Call(chained_call);
+            call_node = NodeKind::Call(chained_call).scope(self.depth());
         }
         call_node
     }
     fn expr_push(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
+        let span = pair.as_span();
         let mut pairs = pair.into_inner();
-        let head = Node::Term(self.term(pairs.next().unwrap()));
+        let head = self.term(pairs.next().unwrap());
         if let Some(pair) = pairs.next() {
-            Node::Push(PushExpr {
+            let tail = self.expr_push(pair);
+            NodeKind::Push(PushExpr {
                 head: head.into(),
-                tail: self.expr_push(pair).into(),
+                tail: tail.into(),
+                span,
             })
+            .scope(self.depth())
         } else {
             head
         }
     }
-    fn term(&mut self, pair: Pair<'a, Rule>) -> Term<'a> {
+    fn term(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
+        let span = pair.as_span();
         let pair = only(pair);
-        match pair.as_rule() {
+        let (term, scope) = match pair.as_rule() {
             Rule::int => match pair.as_str().parse::<i64>() {
-                Ok(i) => Term::Int(i),
+                Ok(i) => (Term::Int(i), 0),
                 Err(_) => {
                     self.errors
                         .push(TranspileError::InvalidLiteral(pair.as_span()));
-                    Term::Int(0)
+                    (Term::Int(0), 0)
                 }
             },
             Rule::real => match pair.as_str().parse::<f64>() {
-                Ok(i) => Term::Real(i),
+                Ok(i) => (Term::Real(i), 0),
                 Err(_) => {
                     self.errors
                         .push(TranspileError::InvalidLiteral(pair.as_span()));
-                    Term::Real(0.0)
+                    (Term::Real(0.0), 0)
                 }
             },
-            Rule::nil => Term::Nil,
-            Rule::bool_literal => Term::Bool(pair.as_str() == "true"),
+            Rule::nil => (Term::Nil, 0),
+            Rule::bool_literal => (Term::Bool(pair.as_str() == "true"), 0),
             Rule::ident => {
                 let ident = self.ident(pair);
-                if self.find_binding(ident.name).is_none() {
-                    self.errors.push(TranspileError::UnknownDef(ident.clone()))
-                }
-                Term::Ident(ident)
+                let scope = if let Some(binding) = self.find_binding(ident.name) {
+                    binding.depth()
+                } else {
+                    self.errors.push(TranspileError::UnknownDef(ident.clone()));
+                    0
+                };
+                (Term::Ident(ident), scope)
             }
             Rule::paren_expr => {
                 let pair = only(pair);
                 self.push_scope();
                 let items = self.items(pair);
                 self.pop_scope();
-                Term::Expr(items)
+                (Term::Expr(items), 0)
             }
             Rule::string => {
                 let string = self.string_literal(pair);
-                Term::String(string)
+                (Term::String(string), 0)
             }
             Rule::closure => {
                 let span = pair.as_span();
@@ -435,27 +482,48 @@ impl<'a> ParseState<'a> {
                 let params: Vec<Param> = params_pairs.map(|pair| self.param(pair)).collect();
                 self.push_scope();
                 for param in &params {
-                    self.scope().bind_param(param.ident.name);
+                    self.bind_param(param.ident.name);
                 }
                 let pair = pairs.next().unwrap();
-                let body = match pair.as_rule() {
-                    Rule::items => self.items(pair),
-                    Rule::expr => vec![Item::Node(self.expr(pair))],
-                    rule => unreachable!("{:?}", rule),
-                };
+                let body = self.function_body(pair);
                 self.pop_scope();
-                Term::Closure(Closure { span, params, body }.into())
+                (Term::Closure(Closure { span, params, body }.into()), 0)
             }
             Rule::list_literal => {
-                Term::List(pair.into_inner().map(|pair| self.term(pair)).collect())
+                let (list, scope) =
+                    pair.into_inner()
+                        .fold((Vec::new(), 0), |(mut items, scope), pair| {
+                            let term = self.term(pair);
+                            let term_scope = term.scope;
+                            items.push(term);
+                            (items, scope.max(term_scope))
+                        });
+                let scope = if list.len() <= 1 { scope } else { self.depth() };
+                (Term::List(list), scope)
             }
             Rule::tree_literal => {
                 let mut pairs = pair.into_inner();
-                Term::Tree(Box::new([
-                    self.term(pairs.next().unwrap()),
-                    self.term(pairs.next().unwrap()),
-                    self.term(pairs.next().unwrap()),
-                ]))
+                let left = self.term(pairs.next().unwrap());
+                let middle = self.term(pairs.next().unwrap());
+                let right = self.term(pairs.next().unwrap());
+                let scope = left.scope.max(middle.scope).max(right.scope);
+                (Term::Tree(Box::new([left, right, middle])), scope)
+            }
+            rule => unreachable!("{:?}", rule),
+        };
+        NodeKind::Term(term, span).scope(scope)
+    }
+    fn function_body(&mut self, pair: Pair<'a, Rule>) -> Items<'a> {
+        match pair.as_rule() {
+            Rule::items => self.items(pair),
+            Rule::expr => {
+                let node = self.expr(pair);
+                if node.scope == self.depth() {
+                    self.errors.push(TranspileError::ReturnReferencesLocal(
+                        node.kind.span().clone(),
+                    ))
+                }
+                vec![Item::Node(node)]
             }
             rule => unreachable!("{:?}", rule),
         }

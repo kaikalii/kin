@@ -480,12 +480,12 @@ impl<'a> Transpilation<'a> {
         }
     }
     fn node(self, node: Node<'a>, stack: TranspileStack<'a>) -> Self {
-        match node {
-            Node::Term(term) => self.term(term, stack),
-            Node::BinExpr(expr) => self.bin_expr(expr, stack),
-            Node::UnExpr(expr) => self.un_expr(expr, stack),
-            Node::Call(expr) => self.call_expr(expr, stack),
-            Node::Push(expr) => self.expr_push(expr, stack),
+        match node.kind {
+            NodeKind::Term(term, _) => self.term(term, stack),
+            NodeKind::BinExpr(expr) => self.bin_expr(expr, stack),
+            NodeKind::UnExpr(expr) => self.un_expr(expr, stack),
+            NodeKind::Call(expr) => self.call_expr(expr, stack),
+            NodeKind::Push(expr) => self.expr_push(expr, stack),
         }
     }
     fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack<'a>) -> Self {
@@ -585,7 +585,7 @@ impl<'a> Transpilation<'a> {
             )
         });
         result.push_expr(format!(
-            "{{ .type = List, .data = {{ .List = &{} }} }}",
+            "(NootValue) {{ .type = List, .data = {{ .List = &{} }} }}",
             list_name
         ))
     }
@@ -616,7 +616,7 @@ impl<'a> Transpilation<'a> {
                 let (result, expr) = terms.into_iter().rev().fold(
                     (self, "NOOT_NIL".to_owned()),
                     |(result, tail), term| {
-                        let (result, expr) = result.term(term, stack.clone()).pop_expr();
+                        let (result, expr) = result.node(term, stack.clone()).pop_expr();
                         let item = result.c_name_for("item", false);
                         let result = result.map_c_function(|cf| {
                             cf.with_typed_line(
@@ -627,7 +627,10 @@ impl<'a> Transpilation<'a> {
                         });
                         (
                             result,
-                            format!("{{ .type = List, .data = {{ .List = &{} }} }}", item),
+                            format!(
+                                "(NootValue) {{ .type = List, .data = {{ .List = &{} }} }}",
+                                item
+                            ),
                         )
                     },
                 );
@@ -636,20 +639,20 @@ impl<'a> Transpilation<'a> {
             Term::Tree(terms) => {
                 let [left, middle, right] = *terms;
                 let result = self;
-                let (result, left) = if left.is_underscore() {
+                let (result, left) = if left.kind.is_underscore() {
                     (result, "NULL".into())
                 } else {
-                    let (result, left) = result.term(left, stack.clone()).pop_expr();
+                    let (result, left) = result.node(left, stack.clone()).pop_expr();
                     let left_name = result.c_name_for("left", false);
                     let result =
                         result.map_c_function(|cf| cf.with_line(Some(left_name.clone()), left));
                     (result, left_name)
                 };
-                let (result, middle) = result.term(middle, stack.clone()).pop_expr();
-                let (result, right) = if right.is_underscore() {
+                let (result, middle) = result.node(middle, stack.clone()).pop_expr();
+                let (result, right) = if right.kind.is_underscore() {
                     (result, "NULL".into())
                 } else {
-                    let (result, right) = result.term(right, stack.clone()).pop_expr();
+                    let (result, right) = result.node(right, stack.clone()).pop_expr();
                     let right_name = result.c_name_for("right", false);
                     let result =
                         result.map_c_function(|cf| cf.with_line(Some(right_name.clone()), right));

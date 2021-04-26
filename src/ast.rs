@@ -50,12 +50,39 @@ impl<'a> Def<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Node<'a> {
-    Term(Term<'a>),
+pub enum NodeKind<'a> {
+    Term(Term<'a>, Span<'a>),
     BinExpr(BinExpr<'a>),
     UnExpr(UnExpr<'a>),
     Call(CallExpr<'a>),
     Push(PushExpr<'a>),
+}
+
+impl<'a> NodeKind<'a> {
+    pub fn scope(self, scope: usize) -> Node<'a> {
+        Node { kind: self, scope }
+    }
+    pub fn is_underscore(&self) -> bool {
+        match self {
+            NodeKind::Term(term, _) => term.is_underscore(),
+            _ => false,
+        }
+    }
+    pub fn span(&self) -> &Span<'a> {
+        match self {
+            NodeKind::Term(_, span) => span,
+            NodeKind::BinExpr(expr) => &expr.span,
+            NodeKind::UnExpr(expr) => &expr.span,
+            NodeKind::Call(expr) => &expr.span,
+            NodeKind::Push(expr) => &expr.span,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Node<'a> {
+    pub kind: NodeKind<'a>,
+    pub scope: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -106,13 +133,15 @@ pub enum BinOp {
 pub struct UnExpr<'a> {
     pub inner: Box<Node<'a>>,
     pub op: UnOp,
+    pub span: Span<'a>,
 }
 
 impl<'a> UnExpr<'a> {
-    pub fn new(inner: Node<'a>, op: UnOp) -> Self {
+    pub fn new(inner: Node<'a>, op: UnOp, span: Span<'a>) -> Self {
         UnExpr {
             inner: inner.into(),
             op,
+            span,
         }
     }
 }
@@ -134,6 +163,7 @@ pub struct CallExpr<'a> {
 pub struct PushExpr<'a> {
     pub head: Box<Node<'a>>,
     pub tail: Box<Node<'a>>,
+    pub span: Span<'a>,
 }
 
 #[derive(Debug, Clone)]
@@ -144,8 +174,8 @@ pub enum Term<'a> {
     Ident(Ident<'a>),
     Bool(bool),
     String(String),
-    List(Vec<Term<'a>>),
-    Tree(Box<[Term<'a>; 3]>),
+    List(Vec<Node<'a>>),
+    Tree(Box<[Node<'a>; 3]>),
     Closure(Box<Closure<'a>>),
     Nil,
 }
