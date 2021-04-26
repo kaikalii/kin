@@ -171,12 +171,10 @@ pub enum Term<'a> {
     Int(i64),
     Real(f64),
     Ident(Ident<'a>),
-    Bool(bool),
     String(String),
     List(Vec<Node<'a>>),
     Tree(Box<[Node<'a>; 3]>),
     Closure(Box<Closure<'a>>),
-    Nil,
 }
 
 impl<'a> Term<'a> {

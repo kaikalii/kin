@@ -22,7 +22,11 @@ macro_rules! builtin_functions {
 
 pub const BUILTIN_FUNCTIONS: &[(&str, &str)] =
     builtin_functions!("print", "println", "error", "panic", "not");
-const BUILTIN_VALUES: &[(&str, &str)] = &[("table", "NOOT_EMPTY_TABLE")];
+pub const BUILTIN_VALUES: &[(&str, &str)] = &[
+    ("nil", "NOOT_NIL"),
+    ("true", "NOOT_TRUE"),
+    ("false", "NOOT_FALSE"),
+];
 
 static RESERVED_NAMES: &[&str] = &[
     // C keywords
@@ -590,8 +594,6 @@ impl<'a> Transpilation<'a> {
     }
     fn term(self, term: Term<'a>, stack: TranspileStack<'a>) -> Self {
         match term {
-            Term::Nil => self.push_expr("NOOT_NIL".into()),
-            Term::Bool(b) => self.push_expr(format!("new_bool({})", b as u8)),
             Term::Int(i) => self.push_expr(format!("new_int({})", i)),
             Term::Real(f) => self.push_expr(format!("new_real({})", f)),
             Term::String(s) => self.push_expr(format!("new_string({:?}, {})", s, s.len())),

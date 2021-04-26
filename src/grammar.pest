@@ -3,7 +3,7 @@ ws = { WHITESPACE }
 single_line_comment = @{ "--" ~ (!NEWLINE ~ ANY)* ~ &(NEWLINE | EOI) }
 multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ ("'''" | &EOI) }
 COMMENT = _{ multi_line_comment | single_line_comment }
-keyword = { "true" | "false" | "nil" | "and" | "or" | "end" }
+keyword = { "and" | "or" | "end" }
 
 // Numbers
 int = @{ ("+" | "-")? ~ ASCII_DIGIT+ }
@@ -39,12 +39,10 @@ op_un = { "-" }
 
 // Expressions
 paren_expr = { "(" ~ NEWLINE? ~ items ~ NEWLINE? ~ ")" }
-bool_literal = { "true" | "false" }
-nil = { "nil" }
 param = { ident }
 closure_params = { (param | "|" ~ param*) ~ "|" }
 closure = { closure_params ~ (NEWLINE ~ items ~ "end" | expr)}
-term = { real | int | closure | ident | bool_literal | nil | string | list_literal | tree_literal | paren_expr }
+term = { real | int | closure | ident | string | list_literal | tree_literal | paren_expr }
 expr_push = { term ~ (":" ~ expr_push)? }
 expr_call_single = { expr_push+ }
 chain_call = _{ "," ~ NEWLINE? }

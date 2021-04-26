@@ -71,6 +71,7 @@ pub fn parse(input: &str) -> Result<Items, Vec<TranspileError>> {
             let default_scope = Scope {
                 bindings: crate::transpile::BUILTIN_FUNCTIONS
                     .iter()
+                    .chain(crate::transpile::BUILTIN_VALUES)
                     .map(|&(name, _)| (name, Binding::Builtin))
                     .collect(),
             };
@@ -464,8 +465,6 @@ impl<'a> ParseState<'a> {
                     (Term::Real(0.0), 0)
                 }
             },
-            Rule::nil => (Term::Nil, 0),
-            Rule::bool_literal => (Term::Bool(pair.as_str() == "true"), 0),
             Rule::ident => {
                 let ident = self.ident(pair);
                 let scope = if let Some(binding) = self.find_binding(ident.name) {

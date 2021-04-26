@@ -118,9 +118,6 @@ typedef struct NootTree {
     NootValue* right;
 } NootTree;
 
-// The nil Noot value
-const NootValue NOOT_NIL = { .type = Nil };
-
 #define new_bool(b) (NootValue) { .type = Bool, .data = { .Bool = b } }
 #define new_int(i) (NootValue) { .type = Int, .data = { .Int = i } }
 #define new_real(i) (NootValue) { .type = Real, .data = { .Real = i } }
@@ -130,6 +127,13 @@ const NootValue NOOT_NIL = { .type = Nil };
 #define new_table(table) (NootValue) { .type = Table, .data = { .Table = table } }
 #define new_noot_string(string, l) (NootString) { .s = string, .len = l }
 #define new_string(s, len) (NootValue) { .type = String, .data = { .String = new_noot_string(s, len) } }
+
+// The nil Noot value
+const NootValue NOOT_NIL = { .type = Nil };
+// The true Noot value
+const NootValue NOOT_TRUE = new_bool(true);
+// The false Noot value
+const NootValue NOOT_FALSE = new_bool(false);
 
 void noot_binary_type_panic(char* message, NootType a, NootType b) {
     char str[256];
