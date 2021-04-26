@@ -1,13 +1,17 @@
 #![allow(clippy::upper_case_acronyms)]
 
-use std::rc::Rc;
-
 use pest::Span;
 
 #[derive(Debug, Clone)]
 pub struct Ident<'a> {
     pub name: &'a str,
     pub span: Span<'a>,
+}
+
+impl<'a> Ident<'a> {
+    pub fn is_underscore(&self) -> bool {
+        self.name == "_"
+    }
 }
 
 impl<'a> PartialEq for Ident<'a> {
@@ -20,7 +24,7 @@ impl<'a> Eq for Ident<'a> {}
 #[derive(Debug, Clone)]
 pub enum Item<'a> {
     Node(Node<'a>),
-    Def(Rc<Def<'a>>),
+    Def(Def<'a>),
 }
 
 pub type Items<'a> = Vec<Item<'a>>;
@@ -149,7 +153,7 @@ pub enum Term<'a> {
 impl<'a> Term<'a> {
     pub fn is_underscore(&self) -> bool {
         if let Term::Ident(ident) = self {
-            ident.name == "_"
+            ident.is_underscore()
         } else {
             false
         }

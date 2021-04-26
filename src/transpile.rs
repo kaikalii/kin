@@ -2,7 +2,6 @@ use std::{
     fs::{self, File},
     io::{self, Write},
     iter::once,
-    rc::Rc,
 };
 
 use itertools::*;
@@ -437,7 +436,7 @@ impl<'a> Transpilation<'a> {
 
     fn item(self, item: Item<'a>, stack: TranspileStack<'a>) -> (Self, TranspileStack<'a>) {
         match item {
-            Item::Def(def) => self.def(Rc::try_unwrap(def).unwrap(), stack),
+            Item::Def(def) => self.def(def, stack),
             Item::Node(node) => {
                 let result = self.node(node, stack.clone());
                 (result, stack)
