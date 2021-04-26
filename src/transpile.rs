@@ -26,6 +26,7 @@ pub const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!(
     "error",
     "panic",
     "not",
+    "assert",
     ("add", "noot_add_fn"),
     ("sub", "noot_sub_fn"),
     ("mul", "noot_mul_fn"),

@@ -489,7 +489,16 @@ NootValue noot_not(uint8_t count, NootValue* args) {
 }
 
 bool noot_is_true(NootValue val) {
-    return (val.type == Bool) * val.data.Bool + (val.type != Bool) * (val.type != Nil);
+    return (val.type == Bool) * val.data.Bool + (val.type != Bool) * (val.type != Nil && val.type != Error);
+}
+
+NootValue noot_assert(uint8_t count, NootValue* args) {
+    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
+    if (!noot_is_true(val)) {
+        if (count >= 2) noot_panic(count - 1, args + 1);
+        else noot_panic(count, args);
+    }
+    return val;
 }
 
 #endif
