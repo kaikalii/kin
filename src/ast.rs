@@ -51,6 +51,7 @@ pub enum Node<'a> {
     BinExpr(BinExpr<'a>),
     UnExpr(UnExpr<'a>),
     Call(CallExpr<'a>),
+    Push(PushExpr<'a>),
 }
 
 #[derive(Debug, Clone)]
@@ -123,6 +124,12 @@ pub struct CallExpr<'a> {
     pub caller: Box<Node<'a>>,
     pub args: Vec<Node<'a>>,
     pub span: Span<'a>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PushExpr<'a> {
+    pub head: Box<Node<'a>>,
+    pub tail: Box<Node<'a>>,
 }
 
 #[derive(Debug, Clone)]

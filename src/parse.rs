@@ -340,10 +340,10 @@ impl<'a> ParseState<'a> {
                 Rule::expr_call_single => {
                     let span = pair.as_span();
                     let mut pairs = pair.into_inner();
-                    let caller = Node::Term(self.term(pairs.next().unwrap()));
+                    let caller = self.expr_push(pairs.next().unwrap());
                     calls.push(CallExpr {
                         caller: caller.into(),
-                        args: pairs.map(|pair| Node::Term(self.term(pair))).collect(),
+                        args: pairs.map(|pair| self.expr_push(pair)).collect(),
                         span,
                     });
                 }
@@ -362,6 +362,18 @@ impl<'a> ParseState<'a> {
             call_node = Node::Call(chained_call);
         }
         call_node
+    }
+    fn expr_push(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
+        let mut pairs = pair.into_inner();
+        let head = Node::Term(self.term(pairs.next().unwrap()));
+        if let Some(pair) = pairs.next() {
+            Node::Push(PushExpr {
+                head: head.into(),
+                tail: self.expr_push(pair).into(),
+            })
+        } else {
+            head
+        }
     }
     fn term(&mut self, pair: Pair<'a, Rule>) -> Term<'a> {
         let pair = only(pair);

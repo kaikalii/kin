@@ -486,6 +486,7 @@ impl<'a> Transpilation<'a> {
             Node::BinExpr(expr) => self.bin_expr(expr, stack),
             Node::UnExpr(expr) => self.un_expr(expr, stack),
             Node::Call(expr) => self.call_expr(expr, stack),
+            Node::Push(expr) => self.expr_push(expr, stack),
         }
     }
     fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack<'a>) -> Self {
@@ -572,6 +573,22 @@ impl<'a> Transpilation<'a> {
             f, param_count, params, function_name, line, col
         );
         result.push_expr(call_line)
+    }
+    fn expr_push(self, expr: PushExpr<'a>, stack: TranspileStack<'a>) -> Self {
+        let (result, head) = self.node(*expr.head, stack.clone()).pop_expr();
+        let (result, tail) = result.node(*expr.tail, stack).pop_expr();
+        let list_name = result.c_name_for("list", false);
+        let result = result.map_c_function(|cf| {
+            cf.with_typed_line(
+                list_name.clone(),
+                "NootList",
+                format!("{{ .head = {}, .tail = {} }}", head, tail),
+            )
+        });
+        result.push_expr(format!(
+            "{{ .type = List, .data = {{ .List = &{} }} }}",
+            list_name
+        ))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack<'a>) -> Self {
         match term {
