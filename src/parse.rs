@@ -406,23 +406,28 @@ impl<'a> ParseState<'a> {
         }
         let mut calls = calls.into_iter();
         let first_call = calls.next().unwrap();
-        if first_call.args.is_empty() {
+        let mut depth = first_call
+            .args
+            .iter()
+            .map(|node| node.scope)
+            .min()
+            .unwrap_or_else(|| self.depth());
+        let mut call_node = if first_call.args.is_empty() {
             *first_call.caller
         } else {
-            let mut depth = first_call.args.iter().map(|node| node.scope).min().unwrap();
-            let mut call_node = NodeKind::Call(first_call).scope(depth);
-            for mut chained_call in calls {
-                depth = chained_call
-                    .args
-                    .iter()
-                    .map(|node| node.scope)
-                    .min()
-                    .unwrap_or(depth);
-                chained_call.args.insert(0, call_node);
-                call_node = NodeKind::Call(chained_call).scope(depth);
-            }
-            call_node
+            NodeKind::Call(first_call).scope(depth)
+        };
+        for mut chained_call in calls {
+            depth = chained_call
+                .args
+                .iter()
+                .map(|node| node.scope)
+                .min()
+                .unwrap_or(depth);
+            chained_call.args.insert(0, call_node);
+            call_node = NodeKind::Call(chained_call).scope(depth);
         }
+        call_node
     }
     fn expr_push(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
         let span = pair.as_span();
