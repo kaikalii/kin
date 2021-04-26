@@ -49,7 +49,7 @@ typedef enum NootType {
     Real,
     String,
     List,
-    Table,
+    Tree,
     Function,
     Closure,
     Error,
@@ -62,7 +62,7 @@ static char* noot_type_names[] = {
     "real",
     "string",
     "list",
-    "table",
+    "tree",
     "function",
     "function",
     "error",
@@ -72,8 +72,7 @@ static char* noot_type_names[] = {
 
 typedef struct NootValue NootValue;
 typedef struct NootList NootList;
-typedef struct NootListEntry NootListEntry;
-typedef struct NootTableEntry NootTableEntry;
+typedef struct NootTree NootTree;
 
 // The function pointer type for regular Noot functions
 typedef NootValue(*NootFn)(uint8_t, NootValue* args);
@@ -86,20 +85,6 @@ typedef struct NootFunction {
     NootClosureFn f;
 } NootFunction;
 
-// The shared part of a Noot table
-typedef struct NootTableShared {
-    size_t capacity;
-    NootTableEntry** buffer;
-    int next_id;
-} NootTableShared;
-
-// A Noot table
-typedef struct NootTable {
-    int id;
-    size_t len;
-    NootTableShared* shared;
-} NootTable;
-
 // The data of a Noot value
 typedef union NootData {
     bool Bool;
@@ -110,7 +95,7 @@ typedef union NootData {
     NootFn Function;
     NootFunction Closure;
     NootList* List;
-    NootTable Table;
+    NootTree* Tree;
     struct NootValue* Error;
 } NootData;
 
@@ -126,28 +111,15 @@ typedef struct NootList {
     NootValue tail;
 } NootList;
 
-// The entry of Noot lists
-typedef struct NootListEntry {
-    int id;
-    NootValue val;
-    struct NootListEntry* next;
-} NootListEntry;
-
-// The entry of Noot tables
-typedef struct NootTableEntry {
-    NootValue key;
-    NootListEntry vals;
-    struct NootTableEntry* next;
-} NootTableEntry;
+// A Noot tree
+typedef struct NootTree {
+    NootValue data;
+    NootValue* left;
+    NootValue* right;
+} NootTree;
 
 // The nil Noot value
 const NootValue NOOT_NIL = { .type = Nil };
-
-// An empty Noot table
-const NootValue NOOT_EMPTY_TABLE = {
-    .type = Table,
-    .data = {.Table = {.id = 0, .len = 0, .shared = NULL }},
-};
 
 #define new_bool(b) (NootValue) { .type = Bool, .data = { .Bool = b } }
 #define new_int(i) (NootValue) { .type = Int, .data = { .Int = i } }
@@ -233,30 +205,19 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         }
         printf("]");
         break;
-    case Table:;
-        NootTable table = val.data.Table;
+    case Tree:;
+        NootTree* tree = val.data.Tree;
         printf("{");
-        if (table.shared) {
-            int i = 0;
-            for (int j = 0; j < table.shared->capacity; j++) {
-                NootTableEntry* key_entry = table.shared->buffer[j];
-                while (key_entry) {
-                    NootListEntry* val_entry = &key_entry->vals;
-                    while (val_entry) {
-                        if (val_entry->id <= table.id) {
-                            if (i > 0) printf(" ");
-                            noot_print(1, &key_entry->key);
-                            printf(":");
-                            noot_print(1, &val_entry->val);
-                            i++;
-                            break;
-                        }
-                        val_entry = val_entry->next;
-                    }
-                    key_entry = key_entry->next;
-                }
-            }
+        if (tree) {
+            if (tree->left) noot_print(1, tree->left);
+            else printf("_");
+            printf(" ");
+            noot_print(1, &tree->data);
+            printf(" ");
+            if (tree->right) noot_print(1, tree->right);
+            else printf("_");
         }
+        else printf("_ _ _");
         printf("}");
         break;
     case Function:

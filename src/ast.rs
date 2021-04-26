@@ -139,6 +139,16 @@ pub enum Term<'a> {
     Nil,
 }
 
+impl<'a> Term<'a> {
+    pub fn is_underscore(&self) -> bool {
+        if let Term::Ident(ident) = self {
+            ident.name == "_"
+        } else {
+            false
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Closure<'a> {
     pub span: Span<'a>,

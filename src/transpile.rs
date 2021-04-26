@@ -617,7 +617,44 @@ impl<'a> Transpilation<'a> {
                 );
                 result.push_expr(expr)
             }
-            Term::Tree(_) => unimplemented!(),
+            Term::Tree(terms) => {
+                let [left, middle, right] = *terms;
+                let result = self;
+                let (result, left) = if left.is_underscore() {
+                    (result, "NULL".into())
+                } else {
+                    let (result, left) = result.term(left, stack.clone()).pop_expr();
+                    let left_name = result.c_name_for("left", false);
+                    let result =
+                        result.map_c_function(|cf| cf.with_line(Some(left_name.clone()), left));
+                    (result, left_name)
+                };
+                let (result, middle) = result.term(middle, stack.clone()).pop_expr();
+                let (result, right) = if right.is_underscore() {
+                    (result, "NULL".into())
+                } else {
+                    let (result, right) = result.term(right, stack.clone()).pop_expr();
+                    let right_name = result.c_name_for("right", false);
+                    let result =
+                        result.map_c_function(|cf| cf.with_line(Some(right_name.clone()), right));
+                    (result, right_name)
+                };
+                let tree = result.c_name_for("tree", false);
+                let result = result.map_c_function(|cf| {
+                    cf.with_typed_line(
+                        tree.clone(),
+                        "NootTree",
+                        format!(
+                            "{{ .left = &{}, .data = {}, .right = &{} }}",
+                            left, middle, right
+                        ),
+                    )
+                });
+                result.push_expr(format!(
+                    "{{ .type = Tree, .data = {{ .Tree = &{} }} }}",
+                    tree
+                ))
+            }
             Term::Ident(ident) => {
                 if let Some(def) = stack
                     .noot_scopes
