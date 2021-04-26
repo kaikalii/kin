@@ -79,7 +79,7 @@ pub fn parse(input: &str) -> Result<Items, Vec<TranspileError>> {
                 scopes: vec![default_scope],
                 errors: Vec::new(),
             };
-            let items = state.items(only(pairs.next().unwrap()));
+            let items = state.items(only(pairs.next().unwrap()), false);
             if state.errors.is_empty() {
                 Ok(items)
             } else {
@@ -173,7 +173,7 @@ impl<'a> ParseState<'a> {
             .bindings
             .insert(name, Binding::Unfinished(depth));
     }
-    fn items(&mut self, pair: Pair<'a, Rule>) -> Items<'a> {
+    fn items(&mut self, pair: Pair<'a, Rule>, check_ref: bool) -> Items<'a> {
         let mut items = Vec::new();
         for pair in pair.into_inner() {
             match pair.as_rule() {
@@ -182,12 +182,13 @@ impl<'a> ParseState<'a> {
                 rule => unreachable!("{:?}", rule),
             }
         }
-        if let Item::Node(node) = items.last().unwrap() {
-            let depth = self.depth();
-            if depth > 1 && node.scope == depth {
-                self.errors.push(TranspileError::ReturnReferencesLocal(
-                    node.kind.span().clone(),
-                ))
+        if check_ref {
+            if let Item::Node(node) = items.last().unwrap() {
+                if node.scope == self.depth() {
+                    self.errors.push(TranspileError::ReturnReferencesLocal(
+                        node.kind.span().clone(),
+                    ))
+                }
             }
         }
         items
@@ -239,7 +240,7 @@ impl<'a> ParseState<'a> {
         }
         let pair = pairs.next().unwrap();
         let items_span = pair.as_span();
-        let items = self.function_body(pair);
+        let items = self.function_body(pair, is_function);
         if is_function {
             self.pop_scope();
         } else if ident.is_underscore() {
@@ -405,16 +406,23 @@ impl<'a> ParseState<'a> {
         }
         let mut calls = calls.into_iter();
         let first_call = calls.next().unwrap();
-        let mut call_node = if first_call.args.is_empty() {
+        if first_call.args.is_empty() {
             *first_call.caller
         } else {
-            NodeKind::Call(first_call).scope(self.depth())
-        };
-        for mut chained_call in calls {
-            chained_call.args.insert(0, call_node);
-            call_node = NodeKind::Call(chained_call).scope(self.depth());
+            let mut depth = first_call.args.iter().map(|node| node.scope).min().unwrap();
+            let mut call_node = NodeKind::Call(first_call).scope(depth);
+            for mut chained_call in calls {
+                depth = chained_call
+                    .args
+                    .iter()
+                    .map(|node| node.scope)
+                    .min()
+                    .unwrap_or(depth);
+                chained_call.args.insert(0, call_node);
+                call_node = NodeKind::Call(chained_call).scope(depth);
+            }
+            call_node
         }
-        call_node
     }
     fn expr_push(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
         let span = pair.as_span();
@@ -467,7 +475,7 @@ impl<'a> ParseState<'a> {
             Rule::paren_expr => {
                 let pair = only(pair);
                 self.push_scope();
-                let items = self.items(pair);
+                let items = self.items(pair, true);
                 self.pop_scope();
                 (Term::Expr(items), 0)
             }
@@ -485,7 +493,7 @@ impl<'a> ParseState<'a> {
                     self.bind_param(param.ident.name);
                 }
                 let pair = pairs.next().unwrap();
-                let body = self.function_body(pair);
+                let body = self.function_body(pair, true);
                 self.pop_scope();
                 (Term::Closure(Closure { span, params, body }.into()), 0)
             }
@@ -513,12 +521,12 @@ impl<'a> ParseState<'a> {
         };
         NodeKind::Term(term, span).scope(scope)
     }
-    fn function_body(&mut self, pair: Pair<'a, Rule>) -> Items<'a> {
+    fn function_body(&mut self, pair: Pair<'a, Rule>, check_ref: bool) -> Items<'a> {
         match pair.as_rule() {
-            Rule::items => self.items(pair),
+            Rule::items => self.items(pair, check_ref),
             Rule::expr => {
                 let node = self.expr(pair);
-                if node.scope == self.depth() {
+                if check_ref && node.scope == self.depth() {
                     self.errors.push(TranspileError::ReturnReferencesLocal(
                         node.kind.span().clone(),
                     ))
