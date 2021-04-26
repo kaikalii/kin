@@ -359,6 +359,12 @@ NootValue noot_rem(NootValue a, NootValue b) {
     noot_binary_type_panic("Attempted to divide incompatible types %s and %s", a.type, b.type);
 }
 
+#define bin_fn(f) NootValue f## _fn(uint8_t count, NootValue* args) {  \
+    NootValue left = count >= 1 ? args[0] : NOOT_NIL; \
+    NootValue right = count >= 2 ? args[1] : NOOT_NIL; \
+    return f(left, right); \
+}
+
 bool noot_eq_impl(NootValue a, NootValue b) {
     switch (a.type) {
     case Nil: return b.type == Nil;
@@ -455,6 +461,18 @@ NootValue noot_gt(NootValue a, NootValue b) {
 NootValue noot_ge(NootValue a, NootValue b) {
     return new_bool(noot_gt_impl(a, b) || noot_eq_impl(a, b));
 }
+
+bin_fn(noot_add);
+bin_fn(noot_sub);
+bin_fn(noot_mul);
+bin_fn(noot_div);
+bin_fn(noot_rem);
+bin_fn(noot_eq);
+bin_fn(noot_neq);
+bin_fn(noot_lt);
+bin_fn(noot_le);
+bin_fn(noot_gt);
+bin_fn(noot_ge);
 
 NootValue noot_neg(NootValue val) {
     switch (val.type) {

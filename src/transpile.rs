@@ -15,13 +15,29 @@ struct NootDef {
 }
 
 macro_rules! builtin_functions {
-    ($($name:literal),*) => {
-        &[$(($name, concat!("noot_", $name))),*]
+    ($($name:literal),* $(,($noot_name:literal, $c_text:literal))* $(,)?) => {
+        &[$(($name, concat!("noot_", $name))),* $(,($noot_name, $c_text))*]
     }
 }
 
-pub const BUILTIN_FUNCTIONS: &[(&str, &str)] =
-    builtin_functions!("print", "println", "error", "panic", "not");
+pub const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!(
+    "print",
+    "println",
+    "error",
+    "panic",
+    "not",
+    ("add", "noot_add_fn"),
+    ("sub", "noot_sub_fn"),
+    ("mul", "noot_mul_fn"),
+    ("div", "noot_div_fn"),
+    ("rem", "noot_rem_fn"),
+    ("eq", "noot_eq_fn"),
+    ("ne", "noot_ne_fn"),
+    ("lt", "noot_lt_fn"),
+    ("le", "noot_le_fn"),
+    ("gt", "noot_gt_fn"),
+    ("ge", "noot_ge_fn"),
+);
 pub const BUILTIN_VALUES: &[(&str, &str)] = &[
     ("_", "NOOT_NIL"),
     ("nil", "NOOT_NIL"),
@@ -67,6 +83,8 @@ static RESERVED_NAMES: &[&str] = &[
     "while",
     // Others
     "count",
+    "argc",
+    "argv",
 ];
 
 #[derive(Clone)]
