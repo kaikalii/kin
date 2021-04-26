@@ -203,7 +203,7 @@ NootValue noot_print(uint8_t count, NootValue* args) {
             printed = true;
             curr = &curr->data.List->tail;
         }
-        if (curr) {
+        if (curr && curr->type != Nil) {
             if (printed) printf(" ");
             noot_print(1, curr);
         }
