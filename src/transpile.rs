@@ -21,7 +21,7 @@ macro_rules! builtin_functions {
 }
 
 pub const BUILTIN_FUNCTIONS: &[(&str, &str)] =
-    builtin_functions!("print", "println", "error", "panic");
+    builtin_functions!("print", "println", "error", "panic", "not");
 const BUILTIN_VALUES: &[(&str, &str)] = &[("table", "NOOT_EMPTY_TABLE")];
 
 static RESERVED_NAMES: &[&str] = &[
@@ -544,7 +544,6 @@ impl<'a> Transpilation<'a> {
         let (result, inner) = result.pop_expr();
         let f = match expr.op {
             UnOp::Neg => "noot_neg",
-            UnOp::Not => "noot_not",
         };
         result.push_expr(format!("{}({})", f, inner))
     }

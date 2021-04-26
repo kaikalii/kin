@@ -369,7 +369,6 @@ impl<'a> ParseState<'a> {
         let mut pairs = pair.into_inner();
         let first = pairs.next().unwrap();
         let op = match first.as_str() {
-            "not" => Some(UnOp::Not),
             "-" => Some(UnOp::Neg),
             _ => None,
         };

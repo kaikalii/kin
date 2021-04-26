@@ -460,7 +460,8 @@ NootValue noot_neg(NootValue val) {
     noot_unary_type_panic("Attempted to negate %s", val.type);
 }
 
-NootValue noot_not(NootValue val) {
+NootValue noot_not(uint8_t count, NootValue* args) {
+    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
     if (val.type == Bool) return new_bool(!val.data.Bool);
     else return new_bool(val.type == Nil);
 }

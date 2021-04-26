@@ -148,7 +148,6 @@ impl<'a> UnExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub enum UnOp {
-    Not,
     Neg,
 }
 
