@@ -19,6 +19,7 @@ pub enum TranspileError<'a> {
     DefUnderscoreTerminus(Span<'a>),
     FunctionNamedUnderscore(Span<'a>),
     ReturnReferencesLocal(Span<'a>),
+    ForbiddenRedefinition(Ident<'a>),
 }
 
 impl<'a> fmt::Display for TranspileError<'a> {
@@ -40,6 +41,11 @@ impl<'a> fmt::Display for TranspileError<'a> {
             TranspileError::ReturnReferencesLocal(span) => {
                 format_span("Return value references local value", span.clone(), f)
             }
+            TranspileError::ForbiddenRedefinition(ident) => format_span(
+                format!("{} cannot be redefined", ident.name),
+                ident.span.clone(),
+                f,
+            ),
         }
     }
 }
@@ -157,7 +163,6 @@ impl<'a> ParseState<'a> {
     fn depth(&self) -> usize {
         self.scopes.len()
     }
-
     fn bind_def(&mut self, def: Def<'a>) {
         let depth = self.depth();
         self.scope()
@@ -211,14 +216,22 @@ impl<'a> ParseState<'a> {
         }
         Ident { name, span }
     }
+    fn bound_ident(&mut self, pair: Pair<'a, Rule>) -> Ident<'a> {
+        let ident = self.ident(pair);
+        if ["nil", "true", "false"].contains(&ident.name) {
+            self.errors
+                .push(TranspileError::ForbiddenRedefinition(ident.clone()));
+        }
+        ident
+    }
     fn param(&mut self, pair: Pair<'a, Rule>) -> Param<'a> {
         let mut pairs = pair.into_inner();
-        let ident = self.ident(pairs.next().unwrap());
+        let ident = self.bound_ident(pairs.next().unwrap());
         Param { ident }
     }
     fn def(&mut self, pair: Pair<'a, Rule>) -> Item<'a> {
         let mut pairs = pair.into_inner();
-        let ident = self.ident(pairs.next().unwrap());
+        let ident = self.bound_ident(pairs.next().unwrap());
         let mut params = Vec::new();
         for pair in pairs.by_ref() {
             if let Rule::param = pair.as_rule() {
