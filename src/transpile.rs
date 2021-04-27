@@ -578,8 +578,7 @@ impl<'a> Transpilation<'a> {
             call.args
                 .into_iter()
                 .fold((result, Vector::new()), |(result, params), node| {
-                    let result = result.node(node, stack.clone());
-                    let (result, param) = result.pop_expr();
+                    let (result, param) = result.node_expr(node, "arg", stack.clone());
                     (result, params.push_back(param))
                 });
         let param_count = params.len();
@@ -606,6 +605,16 @@ impl<'a> Transpilation<'a> {
         let (result, tail) = result.node(*expr.tail, stack).pop_expr();
         result.push_expr(format!("new_list(&{}, &{})", head, tail))
     }
+    fn node_expr(self, node: Node<'a>, name: &str, stack: TranspileStack<'a>) -> (Self, String) {
+        if node.kind.is_const() {
+            self.node(node, stack.clone()).pop_expr()
+        } else {
+            let (result, left) = self.node(node, stack.clone()).pop_expr();
+            let name = result.c_name_for(name, false);
+            let result = result.map_c_function(|cf| cf.with_line(Some(name.clone()), left));
+            (result, name)
+        }
+    }
     fn term(self, term: Term<'a>, stack: TranspileStack<'a>) -> Self {
         match term {
             Term::Int(i) => self.push_expr(format!("new_int({})", i)),
@@ -631,7 +640,7 @@ impl<'a> Transpilation<'a> {
                 let (result, expr) = terms.into_iter().rev().fold(
                     (self, "NOOT_NIL".to_owned()),
                     |(result, tail), term| {
-                        let (result, expr) = result.node(term, stack.clone()).pop_expr();
+                        let (result, expr) = result.node_expr(term, "item", stack.clone());
                         (result, format!("new_list(&{}, &{})", expr, tail))
                     },
                 );
@@ -640,20 +649,9 @@ impl<'a> Transpilation<'a> {
             Term::Tree(terms) => {
                 let [left, middle, right] = *terms;
                 let result = self;
-                let tree_item = |node: Node<'a>, name: &str, result: Self| {
-                    if node.kind.is_const() {
-                        result.node(node, stack.clone()).pop_expr()
-                    } else {
-                        let (result, left) = result.node(node, stack.clone()).pop_expr();
-                        let name = result.c_name_for(name, false);
-                        let result =
-                            result.map_c_function(|cf| cf.with_line(Some(name.clone()), left));
-                        (result, name)
-                    }
-                };
-                let (result, left) = tree_item(left, "left", result);
-                let (result, middle) = tree_item(middle, "middle", result);
-                let (result, right) = tree_item(right, "right", result);
+                let (result, left) = result.node_expr(left, "left", stack.clone());
+                let (result, middle) = result.node_expr(middle, "middle", stack.clone());
+                let (result, right) = result.node_expr(right, "right", stack.clone());
                 result.push_expr(format!("new_tree(&{}, &{}, &{})", left, middle, right))
             }
             Term::Ident(ident) => {

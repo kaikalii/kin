@@ -517,15 +517,13 @@ impl<'a> ParseState<'a> {
                 (Term::Closure(Closure { span, params, body }.into()), 0)
             }
             Rule::list_literal => {
-                let (list, scope) =
-                    pair.into_inner()
-                        .fold((Vec::new(), 0), |(mut items, scope), pair| {
-                            let term = self.term(pair);
-                            let term_scope = term.depth;
-                            items.push(term);
-                            (items, scope.max(term_scope))
-                        });
-                (Term::List(list), scope)
+                let list: Vec<Node> = pair.into_inner().map(|pair| self.term(pair)).collect();
+                let depth = match list.len() {
+                    0 => 0,
+                    1 => list.last().unwrap().depth,
+                    _ => self.depth(),
+                };
+                (Term::List(list), depth)
             }
             Rule::tree_literal => {
                 let mut pairs = pair.into_inner();
