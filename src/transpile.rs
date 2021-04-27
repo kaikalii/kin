@@ -590,8 +590,13 @@ impl<'a> Transpilation<'a> {
             .collect();
         let function_name = &result.curr_c_function().noot_name;
         let (line, col) = call.span.split().0.line_col();
+        let params = if param_count == 1 {
+            format!("&{}", params)
+        } else {
+            format!("(NootValue[]) {{ {} }}", params)
+        };
         let call_line = format!(
-            "noot_call({}, {}, (NootValue[]) {{ {} }}, \"{} {}:{}\")",
+            "noot_call({}, {}, {}, \"{} {}:{}\")",
             f, param_count, params, function_name, line, col
         );
         result.push_expr(call_line)
