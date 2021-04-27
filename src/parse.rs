@@ -456,13 +456,12 @@ impl<'a> ParseState<'a> {
         let head = self.term(pairs.next().unwrap());
         if let Some(pair) = pairs.next() {
             let tail = self.expr_push(pair);
-            let depth = head.depth.max(tail.depth);
             NodeKind::Push(PushExpr {
                 head: head.into(),
                 tail: tail.into(),
                 span,
             })
-            .with_depth(depth)
+            .with_depth(self.depth())
         } else {
             head
         }
