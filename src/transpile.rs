@@ -599,10 +599,7 @@ impl<'a> Transpilation<'a> {
     fn expr_push(self, expr: PushExpr<'a>, stack: TranspileStack<'a>) -> Self {
         let (result, head) = self.node(*expr.head, stack.clone()).pop_expr();
         let (result, tail) = result.node(*expr.tail, stack).pop_expr();
-        result.push_expr(format!(
-            "(NootValue) {{ .type = List, .data = {{ .List = {{ .head = &{}, .tail = &{} }} }} }}",
-            head, tail
-        ))
+        result.push_expr(format!("new_list(&{}, &{})", head, tail))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack<'a>) -> Self {
         match term {
@@ -630,13 +627,7 @@ impl<'a> Transpilation<'a> {
                     (self, "NOOT_NIL".to_owned()),
                     |(result, tail), term| {
                         let (result, expr) = result.node(term, stack.clone()).pop_expr();
-                        (
-                            result,
-                            format!(
-                                "(NootValue) {{ .type = List, .data = {{ .List = {{ .head = &{}, .tail = &{} }} }} }}",
-                                 expr, tail
-                            ),
-                        )
+                        (result, format!("new_list(&{}, &{})", expr, tail))
                     },
                 );
                 result.push_expr(expr)
@@ -644,40 +635,10 @@ impl<'a> Transpilation<'a> {
             Term::Tree(terms) => {
                 let [left, middle, right] = *terms;
                 let result = self;
-                let (result, left) = if left.kind.is_underscore() {
-                    (result, "NULL".into())
-                } else {
-                    let (result, left) = result.node(left, stack.clone()).pop_expr();
-                    let left_name = result.c_name_for("left", false);
-                    let result =
-                        result.map_c_function(|cf| cf.with_line(Some(left_name.clone()), left));
-                    (result, left_name)
-                };
+                let (result, left) = result.node(left, stack.clone()).pop_expr();
                 let (result, middle) = result.node(middle, stack.clone()).pop_expr();
-                let (result, right) = if right.kind.is_underscore() {
-                    (result, "NULL".into())
-                } else {
-                    let (result, right) = result.node(right, stack.clone()).pop_expr();
-                    let right_name = result.c_name_for("right", false);
-                    let result =
-                        result.map_c_function(|cf| cf.with_line(Some(right_name.clone()), right));
-                    (result, right_name)
-                };
-                let tree = result.c_name_for("tree", false);
-                let result = result.map_c_function(|cf| {
-                    cf.with_typed_line(
-                        tree.clone(),
-                        "NootTree",
-                        format!(
-                            "{{ .left = &{}, .data = {}, .right = &{} }}",
-                            left, middle, right
-                        ),
-                    )
-                });
-                result.push_expr(format!(
-                    "{{ .type = Tree, .data = {{ .Tree = &{} }} }}",
-                    tree
-                ))
+                let (result, right) = result.node(right, stack.clone()).pop_expr();
+                result.push_expr(format!("new_tree(&{}, &{}, &{})", left, middle, right))
             }
             Term::Ident(ident) => {
                 if let Some(def) = stack

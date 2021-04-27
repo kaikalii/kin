@@ -93,8 +93,8 @@ typedef struct NootList {
 
 // A Noot tree
 typedef struct NootTree {
-    NootValue* data;
     NootValue* left;
+    NootValue* middle;
     NootValue* right;
 } NootTree;
 
@@ -126,8 +126,8 @@ struct NootValue {
 #define new_real(i) new_val(Real, i)
 #define new_function(f) new_val(Function, f)
 #define new_closure(function, caps) new_val(Closure, { .f = function, .captures = caps })
-#define new_list(list) new_val(List, list)
-#define new_tree(tree) new_val(Tree, tree)
+#define new_list(_head, _tail) (NootValue) { .type = List, .data = { .List = { .head = _head, .tail = _tail } } }
+#define new_tree(_left, _middle, _right) (NootValue) { .type = Tree, .data = { .Tree = { .left = _left, .middle = _middle, .right = _right } } }
 #define new_noot_string(string, l) (NootString) { .s = string, .len = l }
 #define new_string(s, len) new_val(String, new_noot_string(s, len))
 
@@ -221,7 +221,7 @@ NootValue noot_print(uint8_t count, NootValue* args) {
             if (tree->left) noot_print(1, tree->left);
             else printf("_");
             printf(" ");
-            noot_print(1, tree->data);
+            noot_print(1, tree->middle);
             printf(" ");
             if (tree->right) noot_print(1, tree->right);
             else printf("_");

@@ -533,7 +533,7 @@ impl<'a> ParseState<'a> {
                 let middle = self.term(pairs.next().unwrap());
                 let right = self.term(pairs.next().unwrap());
                 let scope = left.depth.max(middle.depth).max(right.depth);
-                (Term::Tree(Box::new([left, right, middle])), scope)
+                (Term::Tree(Box::new([left, middle, right])), scope)
             }
             rule => unreachable!("{:?}", rule),
         };

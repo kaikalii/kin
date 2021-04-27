@@ -62,12 +62,6 @@ impl<'a> NodeKind<'a> {
     pub fn with_depth(self, depth: usize) -> Node<'a> {
         Node { kind: self, depth }
     }
-    pub fn is_underscore(&self) -> bool {
-        match self {
-            NodeKind::Term(term, _) => term.is_underscore(),
-            _ => false,
-        }
-    }
     pub fn span(&self) -> &Span<'a> {
         match self {
             NodeKind::Term(_, span) => span,
@@ -175,16 +169,6 @@ pub enum Term<'a> {
     List(Vec<Node<'a>>),
     Tree(Box<[Node<'a>; 3]>),
     Closure(Box<Closure<'a>>),
-}
-
-impl<'a> Term<'a> {
-    pub fn is_underscore(&self) -> bool {
-        if let Term::Ident(ident) = self {
-            ident.is_underscore()
-        } else {
-            false
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
