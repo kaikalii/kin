@@ -120,15 +120,16 @@ struct NootValue {
 
 #define min(a, b) a < b ? a : b
 
-#define new_bool(b) (NootValue) { .type = Bool, .data = { .Bool = b } }
-#define new_int(i) (NootValue) { .type = Int, .data = { .Int = i } }
-#define new_real(i) (NootValue) { .type = Real, .data = { .Real = i } }
-#define new_function(f) (NootValue) { .type = Function, .data = { .Function = f } }
-#define new_closure(function, caps) (NootValue) { .type = Closure, .data = { .Closure = { .f = function, .captures = caps } } }
-#define new_list(list) (NootValue) { .type = List, .data = { .List = list } }
-#define new_table(table) (NootValue) { .type = Table, .data = { .Table = table } }
+#define new_val(_type, _data) (NootValue) { .type = _type, .data = {._type = _data} }
+#define new_bool(b) new_val(Bool, b)
+#define new_int(i) new_val(Int, i)
+#define new_real(i) new_val(Real, i)
+#define new_function(f) new_val(Function, f)
+#define new_closure(function, caps) new_val(Closure, { .f = function, .captures = caps })
+#define new_list(list) new_val(List, list)
+#define new_tree(tree) new_val(Tree, tree)
 #define new_noot_string(string, l) (NootString) { .s = string, .len = l }
-#define new_string(s, len) (NootValue) { .type = String, .data = { .String = new_noot_string(s, len) } }
+#define new_string(s, len) new_val(String, new_noot_string(s, len))
 
 // The nil Noot value
 static NootValue NOOT_NIL = { .type = Nil };
@@ -151,9 +152,7 @@ void noot_unary_type_panic(char* message, NootType ty) {
 
 // Create a new Noot error from a value
 NootValue noot_error(uint8_t count, NootValue* inner) {
-    NootValue val = { .type = Error };
-    val.data.Error = inner;
-    return val;
+    return new_val(Error, inner);
 }
 
 // Call a Noot function or closure value
