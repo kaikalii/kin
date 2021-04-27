@@ -2,6 +2,19 @@
 
 use pest::Span;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Lifetime {
+    pub depth: u8,
+    pub refs: u8,
+}
+
+impl Lifetime {
+    pub const STATIC: Self = Lifetime::new(0, 0);
+    pub const fn new(depth: u8, refs: u8) -> Self {
+        Lifetime { depth, refs }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Ident<'a> {
     pub name: &'a str,
@@ -32,6 +45,12 @@ impl<'a> Item<'a> {
         match self {
             Item::Node(node) => node.kind.is_const(),
             Item::Def(_) => true,
+        }
+    }
+    pub fn lifetime(&self) -> Lifetime {
+        match self {
+            Item::Node(node) => node.lifetime,
+            Item::Def(_) => Lifetime::STATIC,
         }
     }
 }
@@ -68,8 +87,11 @@ pub enum NodeKind<'a> {
 }
 
 impl<'a> NodeKind<'a> {
-    pub fn with_depth(self, depth: usize) -> Node<'a> {
-        Node { kind: self, depth }
+    pub fn life(self, depth: u8, refs: u8) -> Node<'a> {
+        Node {
+            kind: self,
+            lifetime: Lifetime::new(depth, refs),
+        }
     }
     pub fn span(&self) -> &Span<'a> {
         match self {
@@ -92,7 +114,7 @@ impl<'a> NodeKind<'a> {
 #[derive(Debug, Clone)]
 pub struct Node<'a> {
     pub kind: NodeKind<'a>,
-    pub depth: usize,
+    pub lifetime: Lifetime,
 }
 
 #[derive(Debug, Clone)]

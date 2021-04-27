@@ -99,17 +99,18 @@ pub fn parse(input: &str) -> Result<Items, Vec<TranspileError>> {
 
 #[derive(Debug, Clone)]
 enum Binding<'a> {
-    Def(Def<'a>, usize),
-    Param(usize),
+    Def(Def<'a>, Lifetime),
+    Param(u8),
     Builtin,
-    Unfinished(usize),
+    Unfinished(u8),
 }
 
 impl<'a> Binding<'a> {
-    pub fn depth(&self) -> usize {
+    pub fn lifetime(&self) -> Lifetime {
         match self {
-            Binding::Def(_, depth) | Binding::Param(depth) | Binding::Unfinished(depth) => *depth,
-            Binding::Builtin => 0,
+            Binding::Def(_, lt) => *lt,
+            Binding::Param(depth) | Binding::Unfinished(depth) => Lifetime::new(*depth, *depth),
+            Binding::Builtin => Lifetime::STATIC,
         }
     }
 }
@@ -160,14 +161,16 @@ impl<'a> ParseState<'a> {
     fn span(&self, start: usize, end: usize) -> Span<'a> {
         Span::new(self.input, start, end).unwrap()
     }
-    fn depth(&self) -> usize {
-        self.scopes.len()
+    fn depth(&self) -> u8 {
+        self.scopes.len() as u8
     }
     fn bind_def(&mut self, def: Def<'a>) {
         let depth = self.depth();
-        self.scope()
-            .bindings
-            .insert(def.ident.name, Binding::Def(def, depth));
+        let refs = def.items.last().unwrap().lifetime().refs;
+        self.scope().bindings.insert(
+            def.ident.name,
+            Binding::Def(def, Lifetime::new(depth, refs)),
+        );
     }
     fn bind_param(&mut self, name: &'a str) {
         let depth = self.depth() - 1;
@@ -190,7 +193,7 @@ impl<'a> ParseState<'a> {
         }
         if check_ref {
             if let Item::Node(node) = items.last().unwrap() {
-                if node.depth == self.depth() {
+                if node.lifetime.refs == self.depth() {
                     self.errors.push(TranspileError::ReturnReferencesLocal(
                         node.kind.span().clone(),
                     ))
@@ -258,8 +261,9 @@ impl<'a> ParseState<'a> {
         if is_function {
             self.pop_scope();
         } else if ident.is_underscore() {
+            let refs = items.last().unwrap().lifetime().refs;
             return Item::Node(
-                NodeKind::Term(Term::Expr(items), items_span).with_depth(self.depth()),
+                NodeKind::Term(Term::Expr(items), items_span).life(self.depth(), refs),
             );
         }
         let def = Def {
@@ -290,9 +294,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_and(right);
-            let depth = left.depth.max(right.depth);
+            let refs = left.lifetime.refs.max(right.lifetime.refs);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(depth);
+                .life(self.depth(), refs);
         }
         left
     }
@@ -309,9 +313,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_cmp(right);
-            let depth = left.depth.max(right.depth);
+            let refs = left.lifetime.refs.max(right.lifetime.refs);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(depth);
+                .life(self.depth(), refs);
         }
         left
     }
@@ -333,9 +337,8 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_as(right);
-            let depth = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(depth);
+                .life(self.depth(), 0);
         }
         left
     }
@@ -354,7 +357,7 @@ impl<'a> ParseState<'a> {
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_mdr(right);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(0);
+                .life(self.depth(), 0);
         }
         left
     }
@@ -374,7 +377,7 @@ impl<'a> ParseState<'a> {
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_not(right);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(0);
+                .life(self.depth(), 0);
         }
         left
     }
@@ -393,7 +396,7 @@ impl<'a> ParseState<'a> {
         };
         let inner = self.expr_call(inner);
         if let Some(op) = op {
-            NodeKind::UnExpr(UnExpr::new(inner, op, span)).with_depth(0)
+            NodeKind::UnExpr(UnExpr::new(inner, op, span)).life(self.depth(), 0)
         } else {
             inner
         }
@@ -418,26 +421,26 @@ impl<'a> ParseState<'a> {
         }
         let mut calls = calls.into_iter();
         let first_call = calls.next().unwrap();
-        let mut depth = first_call
+        let mut refs = first_call
             .args
             .iter()
-            .map(|node| node.depth)
-            .min()
-            .unwrap_or(first_call.caller.depth);
+            .map(|node| node.lifetime.refs)
+            .max()
+            .unwrap_or(first_call.caller.lifetime.refs);
         let mut call_node = if first_call.args.is_empty() {
             *first_call.caller
         } else {
-            NodeKind::Call(first_call).with_depth(depth)
+            NodeKind::Call(first_call).life(self.depth(), refs)
         };
         for mut chained_call in calls {
-            depth = chained_call
+            refs = chained_call
                 .args
                 .iter()
-                .map(|node| node.depth)
-                .min()
-                .unwrap_or(depth);
+                .map(|node| node.lifetime.refs)
+                .max()
+                .unwrap_or(refs);
             chained_call.args.insert(0, call_node);
-            call_node = NodeKind::Call(chained_call).with_depth(depth);
+            call_node = NodeKind::Call(chained_call).life(self.depth(), refs);
         }
         call_node
     }
@@ -447,12 +450,13 @@ impl<'a> ParseState<'a> {
         let head = self.term(pairs.next().unwrap());
         if let Some(pair) = pairs.next() {
             let tail = self.expr_push(pair);
+            let refs = head.lifetime.depth.max(tail.lifetime.depth);
             NodeKind::Push(PushExpr {
                 head: head.into(),
                 tail: tail.into(),
                 span,
             })
-            .with_depth(self.depth())
+            .life(self.depth(), refs)
         } else {
             head
         }
@@ -460,43 +464,44 @@ impl<'a> ParseState<'a> {
     fn term(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
         let span = pair.as_span();
         let pair = only(pair);
-        let (term, scope) = match pair.as_rule() {
+        let (term, lifetime) = match pair.as_rule() {
             Rule::int => match pair.as_str().parse::<i64>() {
-                Ok(i) => (Term::Int(i), 0),
+                Ok(i) => (Term::Int(i), Lifetime::STATIC),
                 Err(_) => {
                     self.errors
                         .push(TranspileError::InvalidLiteral(pair.as_span()));
-                    (Term::Int(0), 0)
+                    (Term::Int(0), Lifetime::STATIC)
                 }
             },
             Rule::real => match pair.as_str().parse::<f64>() {
-                Ok(i) => (Term::Real(i), 0),
+                Ok(i) => (Term::Real(i), Lifetime::STATIC),
                 Err(_) => {
                     self.errors
                         .push(TranspileError::InvalidLiteral(pair.as_span()));
-                    (Term::Real(0.0), 0)
+                    (Term::Real(0.0), Lifetime::STATIC)
                 }
             },
             Rule::ident => {
                 let ident = self.ident(pair);
-                let depth = if let Some(binding) = self.find_binding(ident.name) {
-                    binding.depth()
+                let lifetime = if let Some(binding) = self.find_binding(ident.name) {
+                    binding.lifetime()
                 } else {
                     self.errors.push(TranspileError::UnknownDef(ident.clone()));
-                    0
+                    Lifetime::STATIC
                 };
-                (Term::Ident(ident), depth)
+                (Term::Ident(ident), lifetime)
             }
             Rule::paren_expr => {
                 let pair = only(pair);
                 self.push_scope();
                 let items = self.items(pair, true);
                 self.pop_scope();
-                (Term::Expr(items), 0)
+                let lifetime = Lifetime::new(self.depth(), items.last().unwrap().lifetime().refs);
+                (Term::Expr(items), lifetime)
             }
             Rule::string => {
                 let string = self.string_literal(pair);
-                (Term::String(string), 0)
+                (Term::String(string), Lifetime::STATIC)
             }
             Rule::closure => {
                 let span = pair.as_span();
@@ -510,35 +515,46 @@ impl<'a> ParseState<'a> {
                 let pair = pairs.next().unwrap();
                 let body = self.function_body(pair, true);
                 self.pop_scope();
-                (Term::Closure(Closure { span, params, body }.into()), 0)
+                let lifetime = Lifetime::new(self.depth(), body.last().unwrap().lifetime().refs);
+                (
+                    Term::Closure(Closure { span, params, body }.into()),
+                    lifetime,
+                )
             }
             Rule::list_literal => {
                 let list: Vec<Node> = pair.into_inner().map(|pair| self.term(pair)).collect();
-                let depth = match list.len() {
-                    0 => 0,
-                    1 => list.last().unwrap().depth,
-                    _ => self.depth(),
+                let lifetime = match list.len() {
+                    0 => Lifetime::STATIC,
+                    1 => list.last().unwrap().lifetime,
+                    _ => Lifetime::new(self.depth(), self.depth()),
                 };
-                (Term::List(list), depth)
+                (Term::List(list), lifetime)
             }
             Rule::tree_literal => {
                 let mut pairs = pair.into_inner();
                 let left = self.term(pairs.next().unwrap());
                 let middle = self.term(pairs.next().unwrap());
                 let right = self.term(pairs.next().unwrap());
-                let scope = left.depth.max(middle.depth).max(right.depth);
-                (Term::Tree(Box::new([left, middle, right])), scope)
+                let refs = left
+                    .lifetime
+                    .depth
+                    .max(middle.lifetime.depth)
+                    .max(right.lifetime.depth);
+                (
+                    Term::Tree(Box::new([left, middle, right])),
+                    Lifetime::new(self.depth(), refs),
+                )
             }
             rule => unreachable!("{:?}", rule),
         };
-        NodeKind::Term(term, span).with_depth(scope)
+        NodeKind::Term(term, span).life(lifetime.depth, lifetime.refs)
     }
     fn function_body(&mut self, pair: Pair<'a, Rule>, check_ref: bool) -> Items<'a> {
         match pair.as_rule() {
             Rule::items => self.items(pair, check_ref),
             Rule::expr => {
                 let node = self.expr(pair);
-                if check_ref && node.depth == self.depth() {
+                if check_ref && node.lifetime.refs >= self.depth() {
                     self.errors.push(TranspileError::ReturnReferencesLocal(
                         node.kind.span().clone(),
                     ))
