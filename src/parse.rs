@@ -112,6 +112,12 @@ impl<'a> Binding<'a> {
             Binding::Builtin => 0,
         }
     }
+    pub fn is_const(&self) -> bool {
+        match self {
+            Binding::Def(def, _) => def.items.iter().all(Item::is_const),
+            _ => true,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -483,13 +489,17 @@ impl<'a> ParseState<'a> {
             },
             Rule::ident => {
                 let ident = self.ident(pair);
-                let scope = if let Some(binding) = self.find_binding(ident.name) {
-                    binding.depth()
+                let depth = if let Some(binding) = self.find_binding(ident.name) {
+                    if binding.is_const() {
+                        0
+                    } else {
+                        binding.depth()
+                    }
                 } else {
                     self.errors.push(TranspileError::UnknownDef(ident.clone()));
                     0
                 };
-                (Term::Ident(ident), scope)
+                (Term::Ident(ident), depth)
             }
             Rule::paren_expr => {
                 let pair = only(pair);
@@ -542,7 +552,7 @@ impl<'a> ParseState<'a> {
             Rule::items => self.items(pair, check_ref),
             Rule::expr => {
                 let node = self.expr(pair);
-                if check_ref && node.depth == self.depth() {
+                if check_ref && !node.kind.is_const() && node.depth == self.depth() {
                     self.errors.push(TranspileError::ReturnReferencesLocal(
                         node.kind.span().clone(),
                     ))

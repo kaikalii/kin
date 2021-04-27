@@ -28,7 +28,7 @@ pub enum Item<'a> {
 }
 
 impl<'a> Item<'a> {
-    fn is_const(&self) -> bool {
+    pub fn is_const(&self) -> bool {
         match self {
             Item::Node(node) => node.kind.is_const(),
             Item::Def(_) => true,
