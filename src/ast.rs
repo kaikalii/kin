@@ -59,8 +59,8 @@ pub enum NodeKind<'a> {
 }
 
 impl<'a> NodeKind<'a> {
-    pub fn scope(self, scope: usize) -> Node<'a> {
-        Node { kind: self, scope }
+    pub fn with_depth(self, depth: usize) -> Node<'a> {
+        Node { kind: self, depth }
     }
     pub fn is_underscore(&self) -> bool {
         match self {
@@ -82,7 +82,7 @@ impl<'a> NodeKind<'a> {
 #[derive(Debug, Clone)]
 pub struct Node<'a> {
     pub kind: NodeKind<'a>,
-    pub scope: usize,
+    pub depth: usize,
 }
 
 #[derive(Debug, Clone)]

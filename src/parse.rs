@@ -190,7 +190,7 @@ impl<'a> ParseState<'a> {
         }
         if check_ref {
             if let Item::Node(node) = items.last().unwrap() {
-                if node.scope == self.depth() {
+                if node.depth == self.depth() {
                     self.errors.push(TranspileError::ReturnReferencesLocal(
                         node.kind.span().clone(),
                     ))
@@ -258,7 +258,9 @@ impl<'a> ParseState<'a> {
         if is_function {
             self.pop_scope();
         } else if ident.is_underscore() {
-            return Item::Node(NodeKind::Term(Term::Expr(items), items_span).scope(self.depth()));
+            return Item::Node(
+                NodeKind::Term(Term::Expr(items), items_span).with_depth(self.depth()),
+            );
         }
         let def = Def {
             ident,
@@ -288,9 +290,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_and(right);
-            let scope = left.scope.max(right.scope);
+            let scope = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .scope(scope);
+                .with_depth(scope);
         }
         left
     }
@@ -307,9 +309,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_cmp(right);
-            let scope = left.scope.max(right.scope);
+            let scope = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .scope(scope);
+                .with_depth(scope);
         }
         left
     }
@@ -331,9 +333,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_as(right);
-            let scope = left.scope.max(right.scope);
+            let scope = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .scope(scope);
+                .with_depth(scope);
         }
         left
     }
@@ -351,9 +353,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_mdr(right);
-            let scope = left.scope.max(right.scope);
+            let scope = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .scope(scope);
+                .with_depth(scope);
         }
         left
     }
@@ -372,9 +374,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_not(right);
-            let scope = left.scope.max(right.scope);
+            let scope = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .scope(scope);
+                .with_depth(scope);
         }
         left
     }
@@ -393,8 +395,8 @@ impl<'a> ParseState<'a> {
         };
         let inner = self.expr_call(inner);
         if let Some(op) = op {
-            let scope = inner.scope;
-            NodeKind::UnExpr(UnExpr::new(inner, op, span)).scope(scope)
+            let scope = inner.depth;
+            NodeKind::UnExpr(UnExpr::new(inner, op, span)).with_depth(scope)
         } else {
             inner
         }
@@ -422,23 +424,23 @@ impl<'a> ParseState<'a> {
         let mut depth = first_call
             .args
             .iter()
-            .map(|node| node.scope)
+            .map(|node| node.depth)
             .min()
-            .unwrap_or_else(|| self.depth());
+            .unwrap_or(first_call.caller.depth);
         let mut call_node = if first_call.args.is_empty() {
             *first_call.caller
         } else {
-            NodeKind::Call(first_call).scope(depth)
+            NodeKind::Call(first_call).with_depth(depth)
         };
         for mut chained_call in calls {
             depth = chained_call
                 .args
                 .iter()
-                .map(|node| node.scope)
+                .map(|node| node.depth)
                 .min()
                 .unwrap_or(depth);
             chained_call.args.insert(0, call_node);
-            call_node = NodeKind::Call(chained_call).scope(depth);
+            call_node = NodeKind::Call(chained_call).with_depth(depth);
         }
         call_node
     }
@@ -448,12 +450,13 @@ impl<'a> ParseState<'a> {
         let head = self.term(pairs.next().unwrap());
         if let Some(pair) = pairs.next() {
             let tail = self.expr_push(pair);
+            let depth = head.depth.max(tail.depth);
             NodeKind::Push(PushExpr {
                 head: head.into(),
                 tail: tail.into(),
                 span,
             })
-            .scope(self.depth())
+            .with_depth(depth)
         } else {
             head
         }
@@ -518,11 +521,10 @@ impl<'a> ParseState<'a> {
                     pair.into_inner()
                         .fold((Vec::new(), 0), |(mut items, scope), pair| {
                             let term = self.term(pair);
-                            let term_scope = term.scope;
+                            let term_scope = term.depth;
                             items.push(term);
                             (items, scope.max(term_scope))
                         });
-                let scope = if list.len() <= 1 { scope } else { self.depth() };
                 (Term::List(list), scope)
             }
             Rule::tree_literal => {
@@ -530,19 +532,19 @@ impl<'a> ParseState<'a> {
                 let left = self.term(pairs.next().unwrap());
                 let middle = self.term(pairs.next().unwrap());
                 let right = self.term(pairs.next().unwrap());
-                let scope = left.scope.max(middle.scope).max(right.scope);
+                let scope = left.depth.max(middle.depth).max(right.depth);
                 (Term::Tree(Box::new([left, right, middle])), scope)
             }
             rule => unreachable!("{:?}", rule),
         };
-        NodeKind::Term(term, span).scope(scope)
+        NodeKind::Term(term, span).with_depth(scope)
     }
     fn function_body(&mut self, pair: Pair<'a, Rule>, check_ref: bool) -> Items<'a> {
         match pair.as_rule() {
             Rule::items => self.items(pair, check_ref),
             Rule::expr => {
                 let node = self.expr(pair);
-                if check_ref && node.scope == self.depth() {
+                if check_ref && node.depth == self.depth() {
                     self.errors.push(TranspileError::ReturnReferencesLocal(
                         node.kind.span().clone(),
                     ))
