@@ -5,7 +5,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
-#include "utf8.h"
+#include <stdint.h>
+#include <stdlib.h>
 
 static char** noot_call_stack = NULL;
 static size_t noot_call_stack_len = 0;
@@ -71,7 +72,6 @@ static char* noot_type_names[] = {
 // Foward declarations
 
 typedef struct NootValue NootValue;
-typedef struct NootList NootList;
 typedef struct NootTree NootTree;
 
 // The function pointer type for regular Noot functions
@@ -85,6 +85,19 @@ typedef struct NootFunction {
     NootClosureFn f;
 } NootFunction;
 
+// A Noot list
+typedef struct NootList {
+    NootValue* head;
+    NootValue* tail;
+} NootList;
+
+// A Noot tree
+typedef struct NootTree {
+    NootValue* data;
+    NootValue* left;
+    NootValue* right;
+} NootTree;
+
 // The data of a Noot value
 typedef union NootData {
     bool Bool;
@@ -94,8 +107,8 @@ typedef union NootData {
     NootString String;
     NootFn Function;
     NootFunction Closure;
-    NootList* List;
-    NootTree* Tree;
+    NootList List;
+    NootTree Tree;
     struct NootValue* Error;
 } NootData;
 
@@ -105,18 +118,7 @@ struct NootValue {
     NootData data;
 };
 
-// A Noot list
-typedef struct NootList {
-    NootValue head;
-    NootValue tail;
-} NootList;
-
-// A Noot tree
-typedef struct NootTree {
-    NootValue data;
-    NootValue* left;
-    NootValue* right;
-} NootTree;
+#define min(a, b) a < b ? a : b
 
 #define new_bool(b) (NootValue) { .type = Bool, .data = { .Bool = b } }
 #define new_int(i) (NootValue) { .type = Int, .data = { .Int = i } }
@@ -129,11 +131,11 @@ typedef struct NootTree {
 #define new_string(s, len) (NootValue) { .type = String, .data = { .String = new_noot_string(s, len) } }
 
 // The nil Noot value
-const NootValue NOOT_NIL = { .type = Nil };
+static NootValue NOOT_NIL = { .type = Nil };
 // The true Noot value
-const NootValue NOOT_TRUE = new_bool(true);
+static NootValue NOOT_TRUE = { .type = Bool, .data = {.Bool = true } };
 // The false Noot value
-const NootValue NOOT_FALSE = new_bool(false);
+static NootValue NOOT_FALSE = { .type = Bool, .data = {.Bool = false } };
 
 void noot_binary_type_panic(char* message, NootType a, NootType b) {
     char str[256];
@@ -201,11 +203,11 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         printf("[");
         bool printed = false;
         NootValue* curr = &val;
-        while (curr->type == List && curr->data.List) {
+        while (curr->type == List && curr->data.List.head) {
             if (printed) printf(" ");
-            noot_print(1, &curr->data.List->head);
+            noot_print(1, curr->data.List.head);
             printed = true;
-            curr = &curr->data.List->tail;
+            curr = curr->data.List.tail;
         }
         if (curr && curr->type != Nil) {
             if (printed) printf(" ");
@@ -214,13 +216,13 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         printf("]");
         break;
     case Tree:;
-        NootTree* tree = val.data.Tree;
+        NootTree* tree = &val.data.Tree;
         printf("{");
         if (tree) {
             if (tree->left) noot_print(1, tree->left);
             else printf("_");
             printf(" ");
-            noot_print(1, &tree->data);
+            noot_print(1, tree->data);
             printf(" ");
             if (tree->right) noot_print(1, tree->right);
             else printf("_");
@@ -385,7 +387,13 @@ bool noot_eq_impl(NootValue a, NootValue b) {
             return a.data.Real == b.data.Real;
         default: return false;
         }
-    case String: return b.type == String && utf8cmp(a.data.String.s, b.data.String.s) == 0;
+    case String:
+        if (b.type == String && a.data.String.len == b.data.String.len) {
+            for (int i = 0; i < a.data.String.len; i++)
+                if (a.data.String.s[i] != b.data.String.s[i]) return false;
+            return true;
+        }
+        else return false;
     case Function: return b.type == Function && a.data.Function == b.data.Function;
     case Closure: return b.type == Closure && a.data.Closure.f == b.data.Closure.f;
     case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
@@ -407,7 +415,16 @@ bool noot_lt_impl(NootValue a, NootValue b) {
         case Real: return a.data.Real < b.data.Real;
         }
         break;
-    case String: if (b.type == String) return utf8cmp(a.data.String.s, b.data.String.s) < 0; break;
+    case String:
+        if (b.type == String) {
+            for (int i = 0; i < min(a.data.String.len, b.data.String.len); i++) {
+                byte ac = a.data.String.s[i];
+                byte bc = b.data.String.s[i];
+                if (ac != bc) return ac < bc;
+            }
+            return a.data.String.len < b.data.String.len;
+        }
+        break;
     case Function: if (b.type == Function) return a.data.Function < b.data.Function; break;
     case Closure: if (b.type == Closure) return a.data.Closure.f < b.data.Closure.f; break;
     case Error: if (b.type == Error) return noot_eq_impl(*a.data.Error, *b.data.Error); break;
@@ -430,7 +447,16 @@ bool noot_gt_impl(NootValue a, NootValue b) {
         case Real: return a.data.Real > b.data.Real;
         }
         break;
-    case String: if (b.type == String) return utf8cmp(a.data.String.s, b.data.String.s) > 0; break;
+    case String:
+        if (b.type == String) {
+            for (int i = 0; i < min(a.data.String.len, b.data.String.len); i++) {
+                byte ac = a.data.String.s[i];
+                byte bc = b.data.String.s[i];
+                if (ac != bc) return ac > bc;
+            }
+            return a.data.String.len > b.data.String.len;
+        }
+        break;
     case Function: if (b.type == Function) return a.data.Function > b.data.Function; break;
     case Closure: if (b.type == Closure) return a.data.Closure.f > b.data.Closure.f; break;
     case Error: if (b.type == Error) return noot_eq_impl(*a.data.Error, *b.data.Error); break;

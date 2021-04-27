@@ -27,6 +27,7 @@ fn main() {
                 .arg("-o")
                 .arg("test")
                 .arg("-O3")
+                .arg("-std=c99")
                 .spawn()
                 .unwrap()
                 .wait()

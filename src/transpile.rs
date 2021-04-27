@@ -599,17 +599,9 @@ impl<'a> Transpilation<'a> {
     fn expr_push(self, expr: PushExpr<'a>, stack: TranspileStack<'a>) -> Self {
         let (result, head) = self.node(*expr.head, stack.clone()).pop_expr();
         let (result, tail) = result.node(*expr.tail, stack).pop_expr();
-        let list_name = result.c_name_for("list", false);
-        let result = result.map_c_function(|cf| {
-            cf.with_typed_line(
-                list_name.clone(),
-                "NootList",
-                format!("{{ .head = {}, .tail = {} }}", head, tail),
-            )
-        });
         result.push_expr(format!(
-            "(NootValue) {{ .type = List, .data = {{ .List = &{} }} }}",
-            list_name
+            "(NootValue) {{ .type = List, .data = {{ .List = {{ .head = &{}, .tail = &{} }} }} }}",
+            head, tail
         ))
     }
     fn term(self, term: Term<'a>, stack: TranspileStack<'a>) -> Self {
@@ -638,19 +630,11 @@ impl<'a> Transpilation<'a> {
                     (self, "NOOT_NIL".to_owned()),
                     |(result, tail), term| {
                         let (result, expr) = result.node(term, stack.clone()).pop_expr();
-                        let item = result.c_name_for("item", false);
-                        let result = result.map_c_function(|cf| {
-                            cf.with_typed_line(
-                                item.clone(),
-                                "NootList",
-                                format!("{{ .head = {}, .tail = {} }}", expr, tail),
-                            )
-                        });
                         (
                             result,
                             format!(
-                                "(NootValue) {{ .type = List, .data = {{ .List = &{} }} }}",
-                                item
+                                "(NootValue) {{ .type = List, .data = {{ .List = {{ .head = &{}, .tail = &{} }} }} }}",
+                                 expr, tail
                             ),
                         )
                     },
