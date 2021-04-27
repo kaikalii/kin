@@ -135,9 +135,9 @@ struct NootValue {
 // The nil Noot value
 static NootValue NOOT_NIL = { .type = Nil };
 // The true Noot value
-static NootValue NOOT_TRUE = { .type = Bool, .data = {.Bool = true } };
+static NootValue NOOT_TRUE = new_bool(true);
 // The false Noot value
-static NootValue NOOT_FALSE = { .type = Bool, .data = {.Bool = false } };
+static NootValue NOOT_FALSE = new_bool(false);
 
 void noot_binary_type_panic(char* message, NootType a, NootType b) {
     char str[256];

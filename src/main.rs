@@ -32,6 +32,7 @@ fn main() {
             exit(1);
         }
     };
+    println!("Check succeeded");
 
     // Transpile
     if app.sub < Sub::Trans {
