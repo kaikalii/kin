@@ -635,9 +635,20 @@ impl<'a> Transpilation<'a> {
             Term::Tree(terms) => {
                 let [left, middle, right] = *terms;
                 let result = self;
-                let (result, left) = result.node(left, stack.clone()).pop_expr();
-                let (result, middle) = result.node(middle, stack.clone()).pop_expr();
-                let (result, right) = result.node(right, stack.clone()).pop_expr();
+                let tree_item = |node: Node<'a>, name: &str, result: Self| {
+                    if node.kind.is_const() {
+                        result.node(node, stack.clone()).pop_expr()
+                    } else {
+                        let (result, left) = result.node(node, stack.clone()).pop_expr();
+                        let name = result.c_name_for(name, false);
+                        let result =
+                            result.map_c_function(|cf| cf.with_line(Some(name.clone()), left));
+                        (result, name)
+                    }
+                };
+                let (result, left) = tree_item(left, "left", result);
+                let (result, middle) = tree_item(middle, "middle", result);
+                let (result, right) = tree_item(right, "right", result);
                 result.push_expr(format!("new_tree(&{}, &{}, &{})", left, middle, right))
             }
             Term::Ident(ident) => {

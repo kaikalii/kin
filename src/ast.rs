@@ -27,6 +27,15 @@ pub enum Item<'a> {
     Def(Def<'a>),
 }
 
+impl<'a> Item<'a> {
+    fn is_const(&self) -> bool {
+        match self {
+            Item::Node(node) => node.kind.is_const(),
+            Item::Def(_) => true,
+        }
+    }
+}
+
 pub type Items<'a> = Vec<Item<'a>>;
 
 #[derive(Debug, Clone)]
@@ -69,6 +78,13 @@ impl<'a> NodeKind<'a> {
             NodeKind::UnExpr(expr) => &expr.span,
             NodeKind::Call(expr) => &expr.span,
             NodeKind::Push(expr) => &expr.span,
+        }
+    }
+    pub fn is_const(&self) -> bool {
+        match self {
+            NodeKind::Push(_) => true,
+            NodeKind::Term(term, _) => term.is_const(),
+            _ => false,
         }
     }
 }
@@ -169,6 +185,16 @@ pub enum Term<'a> {
     List(Vec<Node<'a>>),
     Tree(Box<[Node<'a>; 3]>),
     Closure(Box<Closure<'a>>),
+}
+
+impl<'a> Term<'a> {
+    pub fn is_const(&self) -> bool {
+        match self {
+            Term::Expr(items) => items.iter().all(Item::is_const),
+            Term::Int(_) | Term::Real(_) | Term::String(_) | Term::Ident(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
