@@ -5,7 +5,7 @@ mod parse;
 mod transpile;
 
 fn main() {
-    use std::process::*;
+    use std::{path::PathBuf, process::*};
 
     use transpile::*;
 
@@ -22,10 +22,10 @@ fn main() {
             let transpilation = transpile(items);
             // Compile
             transpilation.write().unwrap();
-            let status = Command::new("gcc")
+            let status = Command::new(compiler_name())
                 .arg("build/main.c")
                 .arg("-o")
-                .arg("test")
+                .arg(PathBuf::from("test").with_extension(EXE_EXT))
                 .arg("-O3")
                 .arg("-std=c99")
                 .spawn()
@@ -42,4 +42,21 @@ fn main() {
             }
         }
     }
+}
+
+const EXE_EXT: &str = if cfg!(windows) { "exe" } else { "" };
+
+fn compiler_name() -> &'static str {
+    use std::process::*;
+    for name in &["gcc", "clang"] {
+        if Command::new(name)
+            .arg("-v")
+            .output()
+            .map_or(false, |output| output.status.success())
+        {
+            return name;
+        }
+    }
+    println!("No compatible C compiler detected.");
+    exit(1)
 }
