@@ -112,12 +112,6 @@ impl<'a> Binding<'a> {
             Binding::Builtin => 0,
         }
     }
-    pub fn is_const(&self) -> bool {
-        match self {
-            Binding::Def(def, _) => def.items.iter().all(Item::is_const),
-            _ => true,
-        }
-    }
 }
 
 #[derive(Default)]
@@ -155,13 +149,13 @@ impl<'a> ParseState<'a> {
     fn scope(&mut self) -> &mut Scope<'a> {
         self.scopes.last_mut().unwrap()
     }
-    fn find_binding(&self, name: &str) -> Option<Binding<'a>> {
+    fn find_binding(&self, name: &str) -> Option<&Binding<'a>> {
         #[cfg(feature = "debug")]
         println!("lookup {:?}", name);
         self.scopes
             .iter()
             .rev()
-            .find_map(|scope| scope.bindings.get(name).cloned())
+            .find_map(|scope| scope.bindings.get(name))
     }
     fn span(&self, start: usize, end: usize) -> Span<'a> {
         Span::new(self.input, start, end).unwrap()
@@ -296,9 +290,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_and(right);
-            let scope = left.depth.max(right.depth);
+            let depth = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(scope);
+                .with_depth(depth);
         }
         left
     }
@@ -315,9 +309,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_cmp(right);
-            let scope = left.depth.max(right.depth);
+            let depth = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(scope);
+                .with_depth(depth);
         }
         left
     }
@@ -339,9 +333,9 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_as(right);
-            let scope = left.depth.max(right.depth);
+            let depth = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(scope);
+                .with_depth(depth);
         }
         left
     }
@@ -359,9 +353,8 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_mdr(right);
-            let scope = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(scope);
+                .with_depth(0);
         }
         left
     }
@@ -380,9 +373,8 @@ impl<'a> ParseState<'a> {
             };
             span = self.span(span.start(), right.as_span().end());
             let right = self.expr_not(right);
-            let scope = left.depth.max(right.depth);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
-                .with_depth(scope);
+                .with_depth(0);
         }
         left
     }
@@ -401,8 +393,7 @@ impl<'a> ParseState<'a> {
         };
         let inner = self.expr_call(inner);
         if let Some(op) = op {
-            let scope = inner.depth;
-            NodeKind::UnExpr(UnExpr::new(inner, op, span)).with_depth(scope)
+            NodeKind::UnExpr(UnExpr::new(inner, op, span)).with_depth(0)
         } else {
             inner
         }
@@ -489,11 +480,7 @@ impl<'a> ParseState<'a> {
             Rule::ident => {
                 let ident = self.ident(pair);
                 let depth = if let Some(binding) = self.find_binding(ident.name) {
-                    if binding.is_const() {
-                        0
-                    } else {
-                        binding.depth()
-                    }
+                    binding.depth()
                 } else {
                     self.errors.push(TranspileError::UnknownDef(ident.clone()));
                     0
@@ -551,7 +538,7 @@ impl<'a> ParseState<'a> {
             Rule::items => self.items(pair, check_ref),
             Rule::expr => {
                 let node = self.expr(pair);
-                if check_ref && !node.kind.is_const() && node.depth == self.depth() {
+                if check_ref && node.depth == self.depth() {
                     self.errors.push(TranspileError::ReturnReferencesLocal(
                         node.kind.span().clone(),
                     ))
