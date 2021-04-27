@@ -53,6 +53,12 @@ impl<'a> Item<'a> {
             Item::Def(_) => Lifetime::STATIC,
         }
     }
+    pub fn span(&self) -> &Span<'a> {
+        match self {
+            Item::Node(node) => node.kind.span(),
+            Item::Def(def) => &def.ident.span,
+        }
+    }
 }
 
 pub type Items<'a> = Vec<Item<'a>>;

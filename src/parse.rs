@@ -20,6 +20,7 @@ pub enum TranspileError<'a> {
     FunctionNamedUnderscore(Span<'a>),
     ReturnReferencesLocal(Span<'a>),
     ForbiddenRedefinition(Ident<'a>),
+    LastItemNotExpression(Span<'a>),
 }
 
 impl<'a> fmt::Display for TranspileError<'a> {
@@ -44,6 +45,11 @@ impl<'a> fmt::Display for TranspileError<'a> {
             TranspileError::ForbiddenRedefinition(ident) => format_span(
                 format!("{} cannot be redefined", ident.name),
                 ident.span.clone(),
+                f,
+            ),
+            TranspileError::LastItemNotExpression(span) => format_span(
+                "The last item in a block must be an expression",
+                span.clone(),
                 f,
             ),
         }
@@ -191,14 +197,20 @@ impl<'a> ParseState<'a> {
                 rule => unreachable!("{:?}", rule),
             }
         }
+        let last_item = items.last().unwrap();
         if check_ref {
-            if let Item::Node(node) = items.last().unwrap() {
+            if let Item::Node(node) = last_item {
                 if node.lifetime.refs == self.depth() {
                     self.errors.push(TranspileError::ReturnReferencesLocal(
                         node.kind.span().clone(),
                     ))
                 }
             }
+        }
+        if self.depth() > 1 && !matches!(last_item, Item::Node(_)) {
+            self.errors.push(TranspileError::LastItemNotExpression(
+                last_item.span().clone(),
+            ));
         }
         items
     }

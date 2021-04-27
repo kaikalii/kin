@@ -121,14 +121,14 @@ struct NootValue {
     NootData data;
 };
 
-#define new_val(_type, _data) (NootValue) { .type = _type, .data = {._type = _data} }
+#define new_val(_type, ...) (NootValue) { .type = _type, .data = {._type = __VA_ARGS__} }
 #define new_bool(b) new_val(Bool, b)
 #define new_int(i) new_val(Int, i)
 #define new_real(i) new_val(Real, i)
 #define new_function(f) new_val(Function, f)
-#define new_closure(function, caps) (NootValue) { .type = Closure, .data = { .Closure = { .f = function, .captures = caps } } }
-#define new_list(_head, _tail) (NootValue) { .type = List, .data = { .List = { .head = _head, .tail = _tail } } }
-#define new_tree(_left, _middle, _right) (NootValue) { .type = Tree, .data = { .Tree = { .left = _left, .middle = _middle, .right = _right } } }
+#define new_closure(function, caps) new_val(Closure, { .f = function, .captures = caps })
+#define new_list(_head, _tail) new_val(List, { .head = _head, .tail = _tail })
+#define new_tree(_left, _middle, _right) new_val(Tree, { .left = _left, .middle = _middle, .right = _right })
 #define new_noot_string(string, l) (NootString) { .s = string, .len = l }
 #define new_string(s, len) new_val(String, new_noot_string(s, len))
 
