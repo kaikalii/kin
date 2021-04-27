@@ -34,7 +34,7 @@ void noot_panic_impl(char* message) {
     printf("%s\n", message);
     for (int i = noot_call_stack_len - 1; i >= 0; i--)
         printf("at %s\n", noot_call_stack[i]);
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 // The type of a byte
