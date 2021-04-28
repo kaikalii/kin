@@ -73,6 +73,8 @@ where
     pair.into_inner().next().unwrap()
 }
 
+static FORBIDDEN_REDIFINITIONS: &[&str] = &["nil", "true", "false"];
+
 #[derive(pest_derive::Parser)]
 #[grammar = "grammar.pest"]
 struct NootParser;
@@ -233,7 +235,7 @@ impl<'a> ParseState<'a> {
     }
     fn bound_ident(&mut self, pair: Pair<'a, Rule>) -> Ident<'a> {
         let ident = self.ident(pair);
-        if ["nil", "true", "false"].contains(&ident.name) {
+        if FORBIDDEN_REDIFINITIONS.contains(&ident.name) {
             self.errors
                 .push(TranspileError::ForbiddenRedefinition(ident.clone()));
         }
