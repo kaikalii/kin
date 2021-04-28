@@ -21,6 +21,8 @@ macro_rules! builtin_functions {
 }
 
 pub const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!(
+    "mom",
+    "dad",
     "print",
     "println",
     "error",
@@ -603,7 +605,12 @@ impl<'a> Transpilation<'a> {
     fn expr_push(self, expr: PushExpr<'a>, stack: TranspileStack<'a>) -> Self {
         let (result, head) = self.node(*expr.head, stack.clone()).pop_expr();
         let (result, tail) = result.node(*expr.tail, stack).pop_expr();
-        result.push_expr(format!("new_list(&{}, &{})", head, tail))
+        let child_name = result.c_name_for("head", false);
+        result.map_c_function(|cf| {
+            cf.with_line(Some(child_name.clone()), head)
+                .with_raw_line(format!("{}.mom = &{};", child_name, tail))
+                .push_expr(child_name)
+        })
     }
     fn node_expr(self, node: Node<'a>, name: &str, stack: TranspileStack<'a>) -> (Self, String) {
         if node.kind.is_const() {
@@ -640,8 +647,13 @@ impl<'a> Transpilation<'a> {
                 let (result, expr) = terms.into_iter().rev().fold(
                     (self, "NOOT_NIL".to_owned()),
                     |(result, tail), term| {
-                        let (result, expr) = result.node_expr(term, "item", stack.clone());
-                        (result, format!("new_list(&{}, &{})", expr, tail))
+                        let item_name = result.c_name_for("item", false);
+                        let (result, expr) = result.node(term, stack.clone()).pop_expr();
+                        let result = result.map_c_function(|cf| {
+                            cf.with_line(Some(item_name.clone()), expr)
+                                .with_raw_line(format!("{}.mom = &{};", item_name, tail))
+                        });
+                        (result, item_name)
                     },
                 );
                 result.push_expr(expr)

@@ -53,8 +53,6 @@ typedef enum NootType {
     Int,
     Real,
     String,
-    List,
-    Tree,
     Function,
     Closure,
     Error,
@@ -66,8 +64,6 @@ static char* noot_type_names[] = {
     "int",
     "real",
     "string",
-    "list",
-    "tree",
     "function",
     "function",
     "error",
@@ -88,19 +84,6 @@ typedef struct NootFunction {
     NootClosureFn f;
 } NootFunction;
 
-// A Noot list
-typedef struct NootList {
-    NootValue* head;
-    NootValue* tail;
-} NootList;
-
-// A Noot tree
-typedef struct NootTree {
-    NootValue* left;
-    NootValue* middle;
-    NootValue* right;
-} NootTree;
-
 // The data of a Noot value
 typedef union NootData {
     bool Bool;
@@ -110,8 +93,6 @@ typedef union NootData {
     NootString String;
     NootFn Function;
     NootFunction Closure;
-    NootList List;
-    NootTree Tree;
     struct NootValue* Error;
 } NootData;
 
@@ -119,25 +100,35 @@ typedef union NootData {
 struct NootValue {
     NootType type;
     NootData data;
+    NootValue* mom;
+    NootValue* dad;
 };
 
-#define new_val(_type, ...) (NootValue) { .type = _type, .data = {._type = __VA_ARGS__} }
+#define new_val(_type, ...) (NootValue) { .type = _type, .data = {._type = __VA_ARGS__}, .mom = NULL, .dad = NULL }
 #define new_bool(b) new_val(Bool, b)
 #define new_int(i) new_val(Int, i)
 #define new_real(i) new_val(Real, i)
 #define new_function(f) new_val(Function, f)
 #define new_closure(function, caps) new_val(Closure, { .f = function, .captures = caps })
-#define new_list(_head, _tail) new_val(List, { .head = _head, .tail = _tail })
-#define new_tree(_left, _middle, _right) new_val(Tree, { .left = _left, .middle = _middle, .right = _right })
 #define new_noot_string(string, l) (NootString) { .s = string, .len = l }
 #define new_string(s, len) new_val(String, new_noot_string(s, len))
 
 // The nil Noot value
-static NootValue NOOT_NIL = { .type = Nil };
+static NootValue NOOT_NIL = { .type = Nil, .mom = NULL, .dad = NULL };
 // The true Noot value
 static NootValue NOOT_TRUE = new_bool(true);
 // The false Noot value
 static NootValue NOOT_FALSE = new_bool(false);
+
+NootValue noot_mom(uint8_t count, NootValue* args) {
+    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
+    return val.mom ? *val.mom : NOOT_NIL;
+}
+
+NootValue noot_dad(uint8_t count, NootValue* args) {
+    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
+    return val.dad ? *val.dad : NOOT_NIL;
+}
 
 void noot_binary_type_panic(char* message, NootType a, NootType b) {
     char str[256];
@@ -200,37 +191,6 @@ NootValue noot_print(uint8_t count, NootValue* args) {
     case String:;
         int len = val.data.String.len;
         printf("%*.*s", len, len, val.data.String.s);
-        break;
-    case List:;
-        printf("[");
-        bool printed = false;
-        NootValue* curr = &val;
-        while (curr->type == List && curr->data.List.head) {
-            if (printed) printf(" ");
-            noot_print(1, curr->data.List.head);
-            printed = true;
-            curr = curr->data.List.tail;
-        }
-        if (curr && curr->type != Nil) {
-            if (printed) printf(" ");
-            noot_print(1, curr);
-        }
-        printf("]");
-        break;
-    case Tree:;
-        NootTree* tree = &val.data.Tree;
-        printf("{");
-        if (tree) {
-            if (tree->left) noot_print(1, tree->left);
-            else printf("_");
-            printf(" ");
-            noot_print(1, tree->middle);
-            printf(" ");
-            if (tree->right) noot_print(1, tree->right);
-            else printf("_");
-        }
-        else printf("_ _ _");
-        printf("}");
         break;
     case Function:
     case Closure:
