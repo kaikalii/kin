@@ -534,13 +534,29 @@ impl<'a> ParseState<'a> {
                 )
             }
             Rule::list_literal => {
-                let list: Vec<Node> = pair.into_inner().map(|pair| self.term(pair)).collect();
-                let lifetime = match list.len() {
-                    0 => Lifetime::STATIC,
-                    1 => list.last().unwrap().lifetime,
-                    _ => Lifetime::new(self.depth(), self.depth()),
-                };
-                (Term::List(list), lifetime)
+                let items: Vec<Node> = pair.into_inner().map(|pair| self.term(pair)).collect();
+                if items.is_empty() {
+                    (
+                        Term::Ident(Ident {
+                            name: "nil",
+                            span: span.clone(),
+                        }),
+                        Lifetime::STATIC,
+                    )
+                } else {
+                    let mut items = items.into_iter().rev();
+                    let mut tail = items.next().unwrap();
+                    for item in items {
+                        let refs = tail.lifetime.depth;
+                        tail = NodeKind::Push(PushExpr {
+                            head: item.into(),
+                            tail: tail.into(),
+                            span: span.clone(),
+                        })
+                        .life(self.depth(), refs);
+                    }
+                    return tail;
+                }
             }
             Rule::tree_literal => {
                 let mut pairs = pair.into_inner();

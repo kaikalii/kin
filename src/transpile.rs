@@ -643,21 +643,6 @@ impl<'a> Transpilation<'a> {
                     result.push_expr(format!("{}_closure", c_name))
                 }
             }
-            Term::List(terms) => {
-                let (result, expr) = terms.into_iter().rev().fold(
-                    (self, "NOOT_NIL".to_owned()),
-                    |(result, tail), term| {
-                        let item_name = result.c_name_for("item", false);
-                        let (result, expr) = result.node(term, stack.clone()).pop_expr();
-                        let result = result.map_c_function(|cf| {
-                            cf.with_line(Some(item_name.clone()), expr)
-                                .with_raw_line(format!("{}.mom = &{};", item_name, tail))
-                        });
-                        (result, item_name)
-                    },
-                );
-                result.push_expr(expr)
-            }
             Term::Tree(terms) => {
                 let [left, middle, right] = *terms;
                 let result = self;

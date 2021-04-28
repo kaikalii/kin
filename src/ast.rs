@@ -210,7 +210,6 @@ pub enum Term<'a> {
     Real(f64),
     Ident(Ident<'a>),
     String(String),
-    List(Vec<Node<'a>>),
     Tree(Box<[Node<'a>; 3]>),
     Closure(Box<Closure<'a>>),
 }
