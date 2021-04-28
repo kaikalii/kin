@@ -1,11 +1,12 @@
 use std::{
+    collections::{BTreeMap, VecDeque},
     fs::{self, File},
     io::{self, Write},
     iter::once,
 };
 
 use itertools::*;
-use rpds::{Queue, RedBlackTreeMap, Vector};
+use rpds::{RedBlackTreeMap, Vector};
 
 use crate::ast::*;
 
@@ -138,16 +139,16 @@ impl<'a> TranspileStack<'a> {
 
 #[derive(Clone)]
 pub struct Transpilation<'a> {
-    functions: RedBlackTreeMap<String, CFunction<'a>>,
-    function_stack: Vector<String>,
+    functions: BTreeMap<String, CFunction<'a>>,
+    function_stack: Vec<String>,
 }
 
 #[derive(Clone)]
 struct CFunction<'a> {
     noot_name: &'a str,
-    exprs: Queue<String>,
-    lines: Vector<CLine>,
-    captures: Vector<CCapture>,
+    exprs: VecDeque<String>,
+    lines: Vec<CLine>,
+    captures: Vec<CCapture>,
     indent: usize,
     max_arg: usize,
 }
@@ -165,6 +166,7 @@ impl<'a> CFunction<'a> {
     }
 }
 
+#[derive(Clone)]
 struct CLine {
     var_name: Option<String>,
     type_name: &'static str,
@@ -173,63 +175,45 @@ struct CLine {
     semicolon: bool,
 }
 
+#[derive(Clone)]
 struct CCapture {
     pub c_name: String,
     pub capture_name: String,
 }
 
 impl<'a> CFunction<'a> {
-    pub fn with_line(self, var_name: Option<String>, value: String) -> Self {
-        CFunction {
-            lines: self.lines.push_back(CLine {
-                var_name,
-                type_name: "NootValue",
-                value,
-                indent: self.indent,
-                semicolon: true,
-            }),
-            ..self
-        }
+    pub fn push_line(&mut self, var_name: Option<String>, value: String) {
+        self.lines.push(CLine {
+            var_name,
+            type_name: "NootValue",
+            value,
+            indent: self.indent,
+            semicolon: true,
+        });
     }
-    pub fn with_typed_line(self, var_name: String, type_name: &'static str, value: String) -> Self {
-        CFunction {
-            lines: self.lines.push_back(CLine {
-                var_name: Some(var_name),
-                type_name,
-                value,
-                indent: self.indent,
-                semicolon: true,
-            }),
-            ..self
-        }
+    pub fn push_typed_line(&mut self, var_name: String, type_name: &'static str, value: String) {
+        self.lines.push(CLine {
+            var_name: Some(var_name),
+            type_name,
+            value,
+            indent: self.indent,
+            semicolon: true,
+        });
     }
-    pub fn with_raw_line(self, value: String) -> Self {
-        CFunction {
-            lines: self.lines.push_back(CLine {
-                var_name: None,
-                type_name: "NootValue",
-                value,
-                indent: self.indent,
-                semicolon: false,
-            }),
-            ..self
-        }
+    pub fn push_raw_line(&mut self, value: String) {
+        self.lines.push(CLine {
+            var_name: None,
+            type_name: "NootValue",
+            value,
+            indent: self.indent,
+            semicolon: false,
+        });
     }
-    pub fn push_expr(self, expr: String) -> Self {
-        CFunction {
-            exprs: self.exprs.enqueue(expr),
-            ..self
-        }
+    pub fn push_expr(&mut self, expr: String) {
+        self.exprs.push_back(expr)
     }
-    pub fn pop_expr(self) -> (Self, Option<String>) {
-        let expr = self.exprs.peek().cloned();
-        (
-            CFunction {
-                exprs: self.exprs.dequeue().unwrap_or_default(),
-                ..self
-            },
-            expr,
-        )
+    pub fn pop_expr(&mut self) -> Option<String> {
+        self.exprs.pop_front()
     }
     pub fn capture_index_of(&self, c_name: &str) -> usize {
         self.captures
@@ -237,35 +221,27 @@ impl<'a> CFunction<'a> {
             .position(|cap| cap.c_name == c_name)
             .unwrap()
     }
-    pub fn with_capture(self, c_name: String, capture_name: String) -> Self {
+    pub fn push_capture(&mut self, c_name: String, capture_name: String) {
         if self.captures.iter().any(|cap| cap.c_name == c_name) {
-            self
-        } else {
-            CFunction {
-                captures: self.captures.push_back(CCapture {
-                    c_name,
-                    capture_name,
-                }),
-                ..self
-            }
+            return;
         }
+        self.captures.push(CCapture {
+            c_name,
+            capture_name,
+        });
     }
-    pub fn indent(self) -> Self {
-        CFunction {
-            indent: self.indent + 1,
-            ..self
-        }
+    pub fn indent(&mut self) {
+        self.indent += 1;
     }
-    pub fn deindent(self) -> Self {
-        CFunction {
-            indent: self.indent - 1,
-            ..self
-        }
+    pub fn deindent(&mut self) {
+        self.indent -= 1;
     }
 }
 
 pub fn transpile(items: Items) -> Transpilation {
-    Transpilation::new().items(items, TranspileStack::new())
+    let mut transpilation = Transpilation::new();
+    transpilation.items(items, TranspileStack::new());
+    transpilation
 }
 
 impl<'a> Transpilation<'a> {
@@ -338,7 +314,7 @@ impl<'a> Transpilation<'a> {
             }
             // Clean up main
             if main {
-                if let (_, Some(expr)) = cf.clone().pop_expr() {
+                if let Some(expr) = cf.clone().pop_expr() {
                     writeln!(source, "    {};", expr)?;
                 }
                 writeln!(source, "    return 0;")?;
@@ -372,105 +348,67 @@ impl<'a> Transpilation<'a> {
         }
         c_name
     }
-    fn start_c_function(self, c_name: String, noot_name: &'a str) -> Self {
-        Transpilation {
-            functions: self
-                .functions
-                .insert(c_name.clone(), CFunction::new(noot_name)),
-            function_stack: self.function_stack.push_back(c_name),
-        }
-    }
-    fn finish_c_function(self) -> Self {
-        let result = self.map_c_function(|cf| {
-            let ret_expr = cf
-                .exprs
-                .peek()
-                .cloned()
-                .unwrap_or_else(|| "NOOT_NIL".into());
-            let cf = CFunction {
-                exprs: cf.exprs.dequeue().unwrap_or_default(),
-                ..cf
-            };
-            cf.with_line(None, format!("return {}", ret_expr))
-        });
-        Transpilation {
-            function_stack: result.function_stack.drop_last().unwrap(),
-            ..result
-        }
-    }
-    fn curr_c_function(&self) -> &CFunction {
+    fn start_c_function(&mut self, c_name: String, noot_name: &'a str) {
         self.functions
-            .get(self.function_stack.last().unwrap())
+            .insert(c_name.clone(), CFunction::new(noot_name));
+        self.function_stack.push(c_name);
+    }
+    fn finish_c_function(&mut self) {
+        let cf = self.c_function();
+        let ret_expr = cf
+            .exprs
+            .front()
+            .cloned()
+            .unwrap_or_else(|| "NOOT_NIL".into());
+        cf.exprs.pop_front().unwrap();
+        cf.push_line(None, format!("return {}", ret_expr));
+        self.function_stack.pop().unwrap();
+    }
+    fn curr_c_function(&mut self) -> &mut CFunction<'a> {
+        self.functions
+            .get_mut(self.function_stack.last().unwrap())
             .unwrap()
     }
-    fn map_c_function_at<F>(self, i: usize, f: F) -> Self
-    where
-        F: FnOnce(CFunction) -> CFunction,
-    {
+    fn c_function_at(&mut self, i: usize) -> &mut CFunction<'a> {
         let function_name = self.function_stack.get(i).unwrap();
-        let cf = self.functions.get(function_name).unwrap();
-        Transpilation {
-            functions: self.functions.insert(function_name.clone(), f(cf.clone())),
-            ..self
-        }
+        self.functions.get_mut(function_name).unwrap()
     }
-    fn map_c_function<F>(self, f: F) -> Self
-    where
-        F: FnOnce(CFunction) -> CFunction,
-    {
+    fn c_function(&mut self) -> &mut CFunction<'a> {
         let last_index = self.function_stack.len() - 1;
-        self.map_c_function_at(last_index, f)
+        self.c_function_at(last_index)
     }
-    fn push_expr(self, expr: String) -> Self {
-        self.map_c_function(|cf| cf.push_expr(expr))
+    fn push_expr(&mut self, expr: String) {
+        self.c_function().push_expr(expr)
     }
-    fn pop_expr(self) -> (Self, String) {
-        let mut expr = None;
-        let result = self.map_c_function(|cf| {
-            let (cf, ex) = cf.pop_expr();
-            expr = ex;
-            cf
-        });
-        (result, expr.unwrap_or_else(|| "NOOT_NIL".into()))
+    fn pop_expr(&mut self) -> String {
+        self.c_function()
+            .pop_expr()
+            .unwrap_or_else(|| "NOOT_NIL".into())
     }
-    fn items(self, items: Items<'a>, stack: TranspileStack<'a>) -> Self {
+    fn items(&mut self, items: Items<'a>, mut stack: TranspileStack<'a>) {
         let item_count = items.len();
-        items
-            .into_iter()
-            .enumerate()
-            .fold((self, stack), |(result, stack), (i, item)| {
-                let (result, stack) = result.item(item, stack);
-                let result = if i == item_count - 1 {
-                    result
-                } else {
-                    result.map_c_function(|cf| {
-                        if let Some(expr) = cf.exprs.peek().cloned() {
-                            let cf = CFunction {
-                                exprs: cf.exprs.dequeue().unwrap_or_default(),
-                                ..cf
-                            };
-                            cf.with_line(None, expr)
-                        } else {
-                            cf
-                        }
-                    })
-                };
-                (result, stack)
-            })
-            .0
-    }
-
-    fn item(self, item: Item<'a>, stack: TranspileStack<'a>) -> (Self, TranspileStack<'a>) {
-        match item {
-            Item::Def(def) => self.def(def, stack),
-            Item::Node(node) => {
-                let result = self.node(node, stack.clone());
-                (result, stack)
+        for (i, item) in items.into_iter().enumerate() {
+            stack = self.item(item, stack);
+            if i < item_count - 1 {
+                let cf = self.c_function();
+                if let Some(expr) = cf.pop_expr() {
+                    cf.push_line(None, expr);
+                }
             }
         }
     }
 
-    fn def(self, def: Def<'a>, stack: TranspileStack<'a>) -> (Self, TranspileStack<'a>) {
+    fn item(&mut self, item: Item<'a>, stack: TranspileStack<'a>) -> TranspileStack<'a> {
+        match item {
+            Item::Def(def) => self.def(def, stack),
+            Item::Node(node) => {
+                self.node(node, stack.clone());
+                stack
+            }
+        }
+    }
+
+    fn def(&mut self, def: Def<'a>, stack: TranspileStack<'a>) -> TranspileStack<'a> {
         let c_name = self.c_name_for(&def.ident.name, def.is_function());
         if def.is_function() {
             // Function
@@ -481,31 +419,26 @@ impl<'a> Transpilation<'a> {
                     is_function: true,
                 },
             );
-            let result =
-                self.function(c_name, def.ident.name, def.params, def.items, stack.clone());
-            (result, stack)
+            self.function(c_name, def.ident.name, def.params, def.items, stack.clone());
+            stack
         } else {
             // Value
-            let result = self.items(def.items, stack.clone());
-            let result = result.map_c_function(|cf| {
-                let (cf, line) = cf.pop_expr();
-                if let Some(line) = line {
-                    cf.with_line(Some(c_name.clone()), line)
-                } else {
-                    cf
-                }
-            });
-            let stack = stack.with_noot_def(
+            self.items(def.items, stack.clone());
+            let cf = self.c_function();
+            let line = cf.pop_expr();
+            if let Some(line) = line {
+                cf.push_line(Some(c_name.clone()), line)
+            }
+            stack.with_noot_def(
                 def.ident.name,
                 NootDef {
                     c_name,
                     is_function: false,
                 },
-            );
-            (result, stack)
+            )
         }
     }
-    fn node(self, node: Node<'a>, stack: TranspileStack<'a>) -> Self {
+    fn node(&mut self, node: Node<'a>, stack: TranspileStack<'a>) {
         match node.kind {
             NodeKind::Term(term, _) => self.term(term, stack),
             NodeKind::BinExpr(expr) => self.bin_expr(expr, stack),
@@ -514,30 +447,29 @@ impl<'a> Transpilation<'a> {
             NodeKind::Push(expr) => self.expr_push(expr, stack),
         }
     }
-    fn bin_expr(self, expr: BinExpr<'a>, stack: TranspileStack<'a>) -> Self {
-        let result = self.node(*expr.left, stack.clone());
-        let (result, left) = result.pop_expr();
+    fn bin_expr(&mut self, expr: BinExpr<'a>, stack: TranspileStack<'a>) {
+        self.node(*expr.left, stack.clone());
+        let left = self.pop_expr();
         let (f, can_fail) = match expr.op {
             BinOp::Or | BinOp::And => {
                 let or = expr.op == BinOp::Or;
-                let temp_name = result.c_name_for("temp", false);
-                let result = result.map_c_function(|cf| {
-                    cf.with_line(Some(temp_name.clone()), left)
-                        .with_raw_line(format!(
-                            "if ({}noot_is_true({})) {{",
-                            if or { "!" } else { "" },
-                            temp_name
-                        ))
-                        .indent()
-                });
-                let result = result.node(*expr.right, stack);
-                let (result, right) = result.pop_expr();
-                return result.map_c_function(|cf| {
-                    cf.with_raw_line(format!("{} = {};", temp_name, right))
-                        .deindent()
-                        .with_raw_line("}".into())
-                        .push_expr(temp_name)
-                });
+                let temp_name = self.c_name_for("temp", false);
+                let cf = self.c_function();
+                cf.push_line(Some(temp_name.clone()), left);
+                cf.push_raw_line(format!(
+                    "if ({}noot_is_true({})) {{",
+                    if or { "!" } else { "" },
+                    temp_name
+                ));
+                cf.indent();
+                self.node(*expr.right, stack);
+                let right = self.pop_expr();
+                let cf = self.c_function();
+                cf.push_raw_line(format!("{} = {};", temp_name, right));
+                cf.deindent();
+                cf.push_raw_line("}".into());
+                cf.push_expr(temp_name);
+                return;
             }
             BinOp::Equals => ("noot_eq", false),
             BinOp::NotEquals => ("noot_neq", false),
@@ -551,45 +483,39 @@ impl<'a> Transpilation<'a> {
             BinOp::Div => ("noot_div", true),
             BinOp::Rem => ("noot_rem", true),
         };
-        let result = result.node(*expr.right, stack);
-        let (result, right) = result.pop_expr();
+        self.node(*expr.right, stack);
+        let right = self.pop_expr();
         if can_fail {
-            let function_name = &result.curr_c_function().noot_name;
+            let function_name = &self.curr_c_function().noot_name;
             let (line, col) = expr.op_span.split().0.line_col();
             let call_line = format!(
                 "noot_call_bin_op({}, {}, {}, \"{} {}:{}\")",
                 f, left, right, function_name, line, col
             );
-            result.push_expr(call_line)
+            self.push_expr(call_line)
         } else {
-            result.push_expr(format!("{}({}, {})", f, left, right))
+            self.push_expr(format!("{}({}, {})", f, left, right))
         }
     }
-    fn un_expr(self, expr: UnExpr<'a>, stack: TranspileStack<'a>) -> Self {
-        let result = self.node(*expr.inner, stack);
-        let (result, inner) = result.pop_expr();
+    fn un_expr(&mut self, expr: UnExpr<'a>, stack: TranspileStack<'a>) {
+        self.node(*expr.inner, stack);
+        let inner = self.pop_expr();
         let f = match expr.op {
             UnOp::Neg => "noot_neg",
         };
-        result.push_expr(format!("{}({})", f, inner))
+        self.push_expr(format!("{}({})", f, inner))
     }
-    fn call_expr(self, call: CallExpr<'a>, stack: TranspileStack<'a>) -> Self {
-        let result = self.node(*call.caller, stack.clone());
-        let (result, f) = result.pop_expr();
-        let (result, params) =
-            call.args
-                .into_iter()
-                .fold((result, Vector::new()), |(result, params), node| {
-                    let (result, param) = result.node_expr(node, "arg", stack.clone());
-                    (result, params.push_back(param))
-                });
+    fn call_expr(&mut self, call: CallExpr<'a>, stack: TranspileStack<'a>) {
+        self.node(*call.caller, stack.clone());
+        let f = self.pop_expr();
+        let mut params = Vec::new();
+        for node in call.args {
+            let param = self.node_expr(node, "arg", stack.clone());
+            params.push(param)
+        }
         let param_count = params.len();
-        let params: String = params
-            .into_iter()
-            .cloned()
-            .intersperse(", ".into())
-            .collect();
-        let function_name = &result.curr_c_function().noot_name;
+        let params: String = params.into_iter().intersperse(", ".into()).collect();
+        let function_name = &self.curr_c_function().noot_name;
         let (line, col) = call.span.split().0.line_col();
         let params = if param_count == 1 {
             format!("&{}", params)
@@ -600,29 +526,32 @@ impl<'a> Transpilation<'a> {
             "noot_call({}, {}, {}, \"{} {}:{}\")",
             f, param_count, params, function_name, line, col
         );
-        result.push_expr(call_line)
+        self.push_expr(call_line)
     }
-    fn expr_push(self, expr: PushExpr<'a>, stack: TranspileStack<'a>) -> Self {
-        let (result, head) = self.node(*expr.head, stack.clone()).pop_expr();
-        let (result, tail) = result.node(*expr.tail, stack).pop_expr();
-        let child_name = result.c_name_for("head", false);
-        result.map_c_function(|cf| {
-            cf.with_line(Some(child_name.clone()), head)
-                .with_raw_line(format!("{}.mom = &{};", child_name, tail))
-                .push_expr(child_name)
-        })
+    fn expr_push(&mut self, expr: PushExpr<'a>, stack: TranspileStack<'a>) {
+        self.node(*expr.head, stack.clone());
+        let head = self.pop_expr();
+        self.node(*expr.tail, stack);
+        let tail = self.pop_expr();
+        let head_name = self.c_name_for("head", false);
+        let cf = self.c_function();
+        cf.push_line(Some(head_name.clone()), head);
+        cf.push_raw_line(format!("{}.mom = &{};", head_name, tail));
+        cf.push_expr(head_name);
     }
-    fn node_expr(self, node: Node<'a>, name: &str, stack: TranspileStack<'a>) -> (Self, String) {
+    fn node_expr(&mut self, node: Node<'a>, name: &str, stack: TranspileStack<'a>) -> String {
         if node.kind.is_const() {
-            self.node(node, stack.clone()).pop_expr()
+            self.node(node, stack.clone());
+            self.pop_expr()
         } else {
-            let (result, left) = self.node(node, stack.clone()).pop_expr();
-            let name = result.c_name_for(name, false);
-            let result = result.map_c_function(|cf| cf.with_line(Some(name.clone()), left));
-            (result, name)
+            self.node(node, stack.clone());
+            let left = self.pop_expr();
+            let name = self.c_name_for(name, false);
+            self.c_function().push_line(Some(name.clone()), left);
+            name
         }
     }
-    fn term(self, term: Term<'a>, stack: TranspileStack<'a>) -> Self {
+    fn term(&mut self, term: Term<'a>, stack: TranspileStack<'a>) {
         match term {
             Term::Int(i) => self.push_expr(format!("new_int({})", i)),
             Term::Real(f) => self.push_expr(format!("new_real({})", f)),
@@ -630,26 +559,25 @@ impl<'a> Transpilation<'a> {
             Term::Expr(items) => self.items(items, stack),
             Term::Closure(closure) => {
                 let c_name = self.c_name_for("anon", true);
-                let result = self.function(
+                self.function(
                     c_name.clone(),
                     "closure",
                     closure.params,
                     closure.body,
                     stack,
                 );
-                if result.functions.get(&c_name).unwrap().captures.is_empty() {
-                    result.push_expr(format!("new_function(&{})", c_name))
+                if self.functions.get(&c_name).unwrap().captures.is_empty() {
+                    self.push_expr(format!("new_function(&{})", c_name))
                 } else {
-                    result.push_expr(format!("{}_closure", c_name))
+                    self.push_expr(format!("{}_closure", c_name))
                 }
             }
             Term::Tree(terms) => {
                 let [left, middle, right] = *terms;
-                let result = self;
-                let (result, left) = result.node_expr(left, "left", stack.clone());
-                let (result, middle) = result.node_expr(middle, "middle", stack.clone());
-                let (result, right) = result.node_expr(right, "right", stack.clone());
-                result.push_expr(format!("new_tree(&{}, &{}, &{})", left, middle, right))
+                let left = self.node_expr(left, "left", stack.clone());
+                let middle = self.node_expr(middle, "middle", stack.clone());
+                let right = self.node_expr(right, "right", stack.clone());
+                self.push_expr(format!("new_tree(&{}, &{}, &{})", left, middle, right))
             }
             Term::Ident(ident) => {
                 if let Some(def) = stack
@@ -681,30 +609,23 @@ impl<'a> Transpilation<'a> {
                     {
                         // Captures
                         let curr_stack_i = self.function_stack.len() - 1;
-                        let (result, _) = (ident_i..self.function_stack.len()).fold(
-                            (self, None),
-                            |(result, mut prev), stack_i| {
-                                let last = curr_stack_i == stack_i;
-                                let result = if last {
-                                    result.map_c_function(|cf| {
-                                        let cap_i = cf.capture_index_of(&value_name);
-                                        cf.push_expr(format!("captures[{}]", cap_i))
-                                    })
-                                } else {
-                                    result.map_c_function_at(stack_i + 1, |cf| {
-                                        let cf = cf.with_capture(
-                                            value_name.clone(),
-                                            prev.clone().unwrap_or_else(|| value_name.clone()),
-                                        );
-                                        let cap_i = cf.capture_index_of(&value_name);
-                                        prev = Some(format!("captures[{}]", cap_i));
-                                        cf
-                                    })
-                                };
-                                (result, prev)
-                            },
-                        );
-                        result
+                        let mut prev = None;
+                        for stack_i in ident_i..self.function_stack.len() {
+                            let last = curr_stack_i == stack_i;
+                            if last {
+                                let cf = self.c_function();
+                                let cap_i = cf.capture_index_of(&value_name);
+                                cf.push_expr(format!("captures[{}]", cap_i))
+                            } else {
+                                let cf = self.c_function_at(stack_i + 1);
+                                cf.push_capture(
+                                    value_name.clone(),
+                                    prev.clone().unwrap_or_else(|| value_name.clone()),
+                                );
+                                let cap_i = cf.capture_index_of(&value_name);
+                                prev = Some(format!("captures[{}]", cap_i));
+                            };
+                        }
                     } else {
                         // Non-captures
                         let is_closure = self
@@ -733,23 +654,22 @@ impl<'a> Transpilation<'a> {
         }
     }
     fn function(
-        self,
+        &mut self,
         c_name: String,
         noot_name: &'a str,
         params: Params<'a>,
         items: Items<'a>,
         stack: TranspileStack<'a>,
-    ) -> Self {
-        let result = self.start_c_function(c_name.clone(), noot_name);
-        let result = result.map_c_function(|cf| {
-            (0..params.len()).fold(cf, |cf, i| {
-                cf.with_typed_line(
-                    format!("{}_arg{}", c_name, i),
-                    "NootValue*",
-                    format!("{i} < count ? &args[{i}] : &NOOT_NIL", i = i),
-                )
-            })
-        });
+    ) {
+        self.start_c_function(c_name.clone(), noot_name);
+        let cf = self.c_function();
+        for i in 0..params.len() {
+            cf.push_typed_line(
+                format!("{}_arg{}", c_name, i),
+                "NootValue*",
+                format!("{i} < count ? &args[{i}] : &NOOT_NIL", i = i),
+            );
+        }
         let stack = params
             .into_iter()
             .enumerate()
@@ -763,35 +683,27 @@ impl<'a> Transpilation<'a> {
                 )
             });
         // Transpile body items and finish function
-        let result = result.items(items, stack);
-        let captures = result.curr_c_function().captures.clone();
-        let result = result.finish_c_function();
+        self.items(items, stack);
+        let captures = self.curr_c_function().captures.clone();
+        self.finish_c_function();
         // Set captures in parent scope
         if captures.is_empty() {
-            result
-        } else {
-            let captures_name = format!("{}_captures", c_name);
-            let closure_name = format!("{}_closure", c_name);
-            let result = result.map_c_function(|cf| {
-                cf.with_raw_line(format!("NootValue {}[{}];", captures_name, captures.len()))
-            });
-            captures
-                .iter()
-                .enumerate()
-                .fold(result, |result, (i, cap)| {
-                    result.map_c_function(|cf| {
-                        cf.with_raw_line(format!(
-                            "{}[{}] = {};",
-                            captures_name, i, cap.capture_name
-                        ))
-                    })
-                })
-                .map_c_function(|cf| {
-                    cf.with_line(
-                        Some(closure_name.clone()),
-                        format!("new_closure(&{}, {})", c_name, captures_name),
-                    )
-                })
+            return;
         }
+        let captures_name = format!("{}_captures", c_name);
+        let closure_name = format!("{}_closure", c_name);
+        self.c_function().push_raw_line(format!(
+            "NootValue {}[{}];",
+            captures_name,
+            captures.len()
+        ));
+        let cf = self.c_function();
+        for (i, cap) in captures.iter().enumerate() {
+            cf.push_raw_line(format!("{}[{}] = {};", captures_name, i, cap.capture_name));
+        }
+        cf.push_line(
+            Some(closure_name),
+            format!("new_closure(&{}, {})", c_name, captures_name),
+        );
     }
 }
