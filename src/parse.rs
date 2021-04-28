@@ -462,7 +462,7 @@ impl<'a> ParseState<'a> {
         let head = self.term(pairs.next().unwrap());
         if let Some(pair) = pairs.next() {
             let tail = self.expr_push(pair);
-            let refs = head.lifetime.depth.max(tail.lifetime.depth);
+            let refs = tail.lifetime.depth;
             NodeKind::Push(PushExpr {
                 head: head.into(),
                 tail: tail.into(),
