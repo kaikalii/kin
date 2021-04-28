@@ -201,7 +201,6 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         noot_print(1, val.data.Error);
         break;
     }
-    if (val.mom && val.mom->type != Nil) noot_print(1, val.mom);
     return new_bool(true);
 }
 

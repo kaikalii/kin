@@ -89,7 +89,6 @@ pub enum NodeKind<'a> {
     BinExpr(BinExpr<'a>),
     UnExpr(UnExpr<'a>),
     Call(CallExpr<'a>),
-    Push(PushExpr<'a>),
 }
 
 impl<'a> NodeKind<'a> {
@@ -105,12 +104,10 @@ impl<'a> NodeKind<'a> {
             NodeKind::BinExpr(expr) => &expr.span,
             NodeKind::UnExpr(expr) => &expr.span,
             NodeKind::Call(expr) => &expr.span,
-            NodeKind::Push(expr) => &expr.span,
         }
     }
     pub fn is_const(&self) -> bool {
         match self {
-            NodeKind::Push(_) => true,
             NodeKind::Term(term, _) => term.is_const(),
             _ => false,
         }
@@ -165,6 +162,8 @@ pub enum BinOp {
     Mul,
     Div,
     Rem,
+    Mom,
+    Dad,
 }
 
 #[derive(Debug, Clone)]

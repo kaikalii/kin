@@ -444,7 +444,6 @@ impl<'a> Transpilation<'a> {
             NodeKind::BinExpr(expr) => self.bin_expr(expr, stack),
             NodeKind::UnExpr(expr) => self.un_expr(expr, stack),
             NodeKind::Call(expr) => self.call_expr(expr, stack),
-            NodeKind::Push(expr) => self.expr_push(expr, stack),
         }
     }
     fn bin_expr(&mut self, expr: BinExpr<'a>, stack: TranspileStack<'a>) {
@@ -469,6 +468,24 @@ impl<'a> Transpilation<'a> {
                 cf.deindent();
                 cf.push_raw_line("}".into());
                 cf.push_expr(temp_name);
+                return;
+            }
+            BinOp::Mom | BinOp::Dad => {
+                let mom = expr.op == BinOp::Mom;
+                self.node(*expr.right, stack);
+                let right = self.pop_expr();
+                let head_name = self.c_name_for("head", false);
+                let cf = self.c_function();
+                cf.push_line(
+                    Some(head_name.clone()),
+                    if mom { left.clone() } else { right.clone() },
+                );
+                cf.push_raw_line(if mom {
+                    format!("{}.mom = &{};", head_name, right)
+                } else {
+                    format!("{}.dad = &{};", head_name, left)
+                });
+                cf.push_expr(head_name);
                 return;
             }
             BinOp::Equals => ("noot_eq", false),
@@ -527,17 +544,6 @@ impl<'a> Transpilation<'a> {
             f, param_count, params, function_name, line, col
         );
         self.push_expr(call_line)
-    }
-    fn expr_push(&mut self, expr: PushExpr<'a>, stack: TranspileStack<'a>) {
-        self.node(*expr.head, stack.clone());
-        let head = self.pop_expr();
-        self.node(*expr.tail, stack);
-        let tail = self.pop_expr();
-        let head_name = self.c_name_for("head", false);
-        let cf = self.c_function();
-        cf.push_line(Some(head_name.clone()), head);
-        cf.push_raw_line(format!("{}.mom = &{};", head_name, tail));
-        cf.push_expr(head_name);
     }
     fn node_expr(&mut self, node: Node<'a>, name: &str, stack: TranspileStack<'a>) -> String {
         if node.kind.is_const() {
