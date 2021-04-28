@@ -3,7 +3,7 @@ ws = { WHITESPACE }
 single_line_comment = @{ "--" ~ (!NEWLINE ~ ANY)* ~ &(NEWLINE | EOI) }
 multi_line_comment = @{ "'''" ~ (!"'''" ~ ANY)* ~ ("'''" | &EOI) }
 COMMENT = _{ multi_line_comment | single_line_comment }
-keyword = { "and" | "or" | "end" }
+keyword = { "and" | "or" | "end" | "struct" | "mod" }
 
 // Numbers
 int = @{ ("+" | "-")? ~ ASCII_DIGIT+ }
