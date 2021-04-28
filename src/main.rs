@@ -9,17 +9,13 @@ use std::str::FromStr;
 use clap::Clap;
 
 fn main() {
-    use std::{path::PathBuf, process::*};
+    use std::process::*;
 
     use transpile::*;
 
     color_backtrace::install();
 
     let app = App::parse();
-
-    if app.sub < Sub::Check {
-        return;
-    }
 
     // Parse and check
     let input = std::fs::read_to_string("test.noot").unwrap();
@@ -35,7 +31,7 @@ fn main() {
     println!("Check succeeded");
 
     // Transpile
-    if app.sub < Sub::Trans {
+    if !app.sub.transpiles() {
         return;
     }
     let transpilation = transpile(items);
@@ -43,19 +39,39 @@ fn main() {
     println!("Transpilation succeeded");
 
     // Compile
-    if app.sub < Sub::Trans {
+    let build_args = if let Some(args) = app.sub.build_args() {
+        args
+    } else {
         return;
+    };
+
+    let ccomp = build_args.compiler.unwrap_or_else(CCompiler::find);
+
+    let mut args: Vec<String> = vec!["build/main.c".into(), "-o".into()];
+
+    let name = "test";
+
+    // Push target arg
+    if build_args.assembly {
+        args.push(format!("{}.asm", name));
+        args.push("-S".into());
+    } else {
+        args.push(format!("{}{}", name, EXE_EXT));
     }
 
-    let ccomp = app.compiler.unwrap_or_else(CCompiler::find);
+    // Push opt arg
+    args.push("-O3".into());
+
+    // Push C standard arg
+    args.push("-std=c99".into());
+
+    // Push stack size arg
+    if let Some(size) = build_args.stack_size {
+        args.push(ccomp.stack_size_arg(size * 1024 * 1024));
+    }
 
     let compile_status = Command::new(ccomp.name())
-        .arg("build/main.c")
-        .arg("-o")
-        .arg(PathBuf::from("test").with_extension(EXE_EXT))
-        .arg("-O3")
-        .arg("-std=c99")
-        .arg(ccomp.stack_size_arg(app.stack_size.map_or(FOUR_MB, |size| size * 1024 * 2014)))
+        .args(args)
         .spawn()
         .unwrap()
         .wait()
@@ -67,7 +83,7 @@ fn main() {
     }
 
     // Run
-    if app.sub < Sub::Run {
+    if !matches!(app.sub, Sub::Run(_)) {
         return;
     }
     println!();
@@ -77,33 +93,49 @@ fn main() {
     }
 }
 
-const FOUR_MB: usize = 16_777_216;
-
 #[derive(Clap)]
 struct App {
     #[clap(subcommand)]
     sub: Sub,
-    #[clap(long = "stack", about = "The executable stack size in MB")]
-    stack_size: Option<usize>,
-    #[clap(long = "compiler", about = "The C compiler to use")]
-    compiler: Option<CCompiler>,
 }
 
-#[derive(Clap, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clap)]
 enum Sub {
     #[clap(alias = "c")]
     Check,
     #[clap(alias = "t")]
     Trans,
     #[clap(alias = "b")]
-    Build,
+    Build(BuildArgs),
     #[clap(alias = "r")]
-    Run,
+    Run(BuildArgs),
 }
 
-const EXE_EXT: &str = if cfg!(windows) { "exe" } else { "" };
+impl Sub {
+    fn build_args(&self) -> Option<&BuildArgs> {
+        match self {
+            Sub::Build(args) | Sub::Run(args) => Some(args),
+            _ => None,
+        }
+    }
+    fn transpiles(&self) -> bool {
+        !matches!(self, Sub::Check)
+    }
+}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clap)]
+struct BuildArgs {
+    #[clap(long = "stack", about = "The executable stack size in MB")]
+    stack_size: Option<usize>,
+    #[clap(about = "The C compiler to use")]
+    compiler: Option<CCompiler>,
+    #[clap(long = "asm")]
+    assembly: bool,
+}
+
+const EXE_EXT: &str = if cfg!(windows) { ".exe" } else { "" };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CCompiler {
     Gcc,
     Clang,

@@ -2,3 +2,4 @@
 *.noot
 /build
 *.exe
+*.asm
