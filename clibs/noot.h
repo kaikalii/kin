@@ -201,7 +201,7 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         noot_print(1, val.data.Error);
         break;
     }
-    return new_bool(true);
+    return val;
 }
 
 NootValue noot_println(uint8_t count, NootValue* args) {
