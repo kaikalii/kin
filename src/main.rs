@@ -70,6 +70,11 @@ fn main() {
         args.push(ccomp.stack_size_arg(size * 1024 * 1024));
     }
 
+    // Push profile arg
+    if build_args.profile {
+        args.push("-pg".into());
+    }
+
     let compile_status = Command::new(ccomp.name())
         .args(args)
         .spawn()
@@ -131,6 +136,8 @@ struct BuildArgs {
     compiler: Option<CCompiler>,
     #[clap(long = "asm")]
     assembly: bool,
+    #[clap(long = "profile")]
+    profile: bool,
 }
 
 const EXE_EXT: &str = if cfg!(windows) { ".exe" } else { "" };
