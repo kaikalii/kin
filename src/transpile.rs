@@ -171,7 +171,6 @@ struct CLine {
     value: String,
     indent: usize,
     semicolon: bool,
-    deref: bool,
 }
 
 impl CLine {
@@ -192,10 +191,6 @@ impl CLine {
         self.type_name = None;
         self
     }
-    fn deref(&mut self) -> &mut Self {
-        self.deref = true;
-        self
-    }
 }
 
 #[derive(Clone)]
@@ -212,7 +207,6 @@ impl<'a> CFunction<'a> {
             value: value.into(),
             indent: self.indent,
             semicolon: true,
-            deref: false,
         };
         self.lines.push(line);
         self.lines.last_mut().unwrap()
@@ -596,14 +590,12 @@ impl<'a> Transpilation<'a> {
                 self.push_expr(format!("new_tree(&{}, &{}, &{})", left, middle, right))
             }
             Term::Ident(ident) => {
-                dbg!(ident.name);
                 if let Some(def) = stack
                     .noot_scopes
                     .iter()
                     .rev()
                     .find_map(|scope| scope.get(ident.name))
                 {
-                    dbg!(&def.c_name);
                     if let Some((ident_i, value_name)) = self
                         .function_stack
                         .iter()
@@ -613,20 +605,25 @@ impl<'a> Transpilation<'a> {
                             cf.lines
                                 .iter()
                                 .find_map(|line| {
-                                    line.var_name
-                                        .as_ref()
-                                        .filter(|&vn| {
-                                            vn == &def.c_name
-                                                || vn == &format!("{}_closure", def.c_name)
-                                        })
-                                        .cloned()
+                                    line.var_name.as_ref().and_then(|vn| {
+                                        if vn == &def.c_name
+                                            || vn == &format!("{}_closure", def.c_name)
+                                        {
+                                            Some(vn.clone())
+                                        } else {
+                                            let derefed = format!("*{}", vn);
+                                            if derefed == def.c_name {
+                                                Some(derefed)
+                                            } else {
+                                                None
+                                            }
+                                        }
+                                    })
                                 })
                                 .map(|name| (i, name))
                         })
                         .filter(|(i, _)| self.function_stack.len() - i > 1)
                     {
-                        dbg!(ident_i);
-                        dbg!(&value_name);
                         // Captures
                         let curr_stack_i = self.function_stack.len() - 1;
                         let mut prev = None;
@@ -653,7 +650,6 @@ impl<'a> Transpilation<'a> {
                                 .functions
                                 .get(&def.c_name)
                                 .map_or(false, |cf| !cf.captures.is_empty());
-                            dbg!(is_closure);
                             if is_closure {
                                 format!("{}_closure", def.c_name)
                             } else {
