@@ -520,7 +520,11 @@ impl<'a> ParseState<'a> {
             Rule::ident => {
                 let ident = self.ident(pair);
                 let lifetime = if let Some(binding) = self.find_binding(ident.name) {
-                    binding.lifetime()
+                    let lt = binding.lifetime();
+                    if lt.depth < self.depth() - 1 {
+                        println!("capturing {} at -{}", ident.name, self.depth() - lt.depth);
+                    }
+                    lt
                 } else {
                     self.errors.push(TranspileError::UnknownDef(ident.clone()));
                     Lifetime::STATIC
