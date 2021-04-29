@@ -82,18 +82,17 @@ struct NootParser;
 pub fn parse(input: &str) -> Result<Items, Vec<TranspileError>> {
     match NootParser::parse(Rule::file, input) {
         Ok(mut pairs) => {
-            let default_scope = Scope {
-                bindings: crate::transpile::BUILTIN_FUNCTIONS
-                    .iter()
-                    .chain(crate::transpile::BUILTIN_VALUES)
-                    .map(|&(name, _)| (name, Binding::Builtin))
-                    .collect(),
-            };
             let mut state = ParseState {
                 input,
-                scopes: vec![default_scope],
+                scopes: vec![FunctionScope::default()],
                 errors: Vec::new(),
             };
+            for (name, _) in crate::transpile::BUILTIN_FUNCTIONS
+                .iter()
+                .chain(crate::transpile::BUILTIN_VALUES)
+            {
+                state.scope().bindings.insert(name, Binding::Builtin);
+            }
             let items = state.items(only(pairs.next().unwrap()), false);
             if state.errors.is_empty() {
                 Ok(items)
@@ -124,57 +123,63 @@ impl<'a> Binding<'a> {
 }
 
 #[derive(Default)]
-struct Scope<'a> {
+struct ParenScope<'a> {
     bindings: HashMap<&'a str, Binding<'a>>,
 }
 
-impl<'a> Scope<'a> {
-    #[cfg(feature = "debug")]
-    fn print_keys(&self) {
-        println!(
-            "{:#?}",
-            unsafe { &*self.bindings.get() }.keys().collect::<Vec<_>>()
-        );
+struct FunctionScope<'a> {
+    scopes: Vec<ParenScope<'a>>,
+    min_refs: u8,
+}
+
+impl<'a> Default for FunctionScope<'a> {
+    fn default() -> Self {
+        FunctionScope {
+            scopes: vec![ParenScope::default()],
+            min_refs: 0,
+        }
     }
 }
 
 struct ParseState<'a> {
     input: &'a str,
-    scopes: Vec<Scope<'a>>,
+    scopes: Vec<FunctionScope<'a>>,
     errors: Vec<TranspileError<'a>>,
 }
 
 impl<'a> ParseState<'a> {
-    fn push_scope(&mut self) {
-        #[cfg(feature = "debug")]
-        println!("push scope");
-        self.scopes.push(Scope::default());
+    fn push_function_scope(&mut self) {
+        self.scopes.push(FunctionScope::default());
     }
-    fn pop_scope(&mut self) {
-        #[cfg(feature = "debug")]
-        println!("pop scope");
-        self.scopes.pop();
+    #[must_use]
+    fn pop_function_scope(&mut self) -> u8 {
+        self.scopes.pop().unwrap().min_refs
     }
-    fn scope(&mut self) -> &mut Scope<'a> {
+    fn push_paren_scope(&mut self) {
+        self.function_scope().scopes.push(ParenScope::default());
+    }
+    fn pop_paren_scope(&mut self) {
+        self.function_scope().scopes.pop();
+    }
+    fn function_scope(&mut self) -> &mut FunctionScope<'a> {
         self.scopes.last_mut().unwrap()
     }
-    fn find_binding(&self, name: &str) -> Option<&Binding<'a>> {
-        #[cfg(feature = "debug")]
-        println!("lookup {:?}", name);
-        self.scopes
-            .iter()
-            .rev()
-            .find_map(|scope| scope.bindings.get(name))
+    fn scope(&mut self) -> &mut ParenScope<'a> {
+        self.function_scope().scopes.last_mut().unwrap()
     }
     fn span(&self, start: usize, end: usize) -> Span<'a> {
         Span::new(self.input, start, end).unwrap()
     }
     fn depth(&self) -> u8 {
+        // self.scopes
+        //     .iter()
+        //     .map(|scope| scope.scopes.len() as u8)
+        //     .sum()
         self.scopes.len() as u8
     }
-    fn bind_def(&mut self, def: Def<'a>) {
+    fn bind_def(&mut self, def: Def<'a>, min_refs: u8) {
         let depth = self.depth();
-        let refs = def.items.last().unwrap().lifetime().refs;
+        let refs = def.items.last().unwrap().lifetime().refs.max(min_refs);
         self.scope().bindings.insert(
             def.ident.name,
             Binding::Def(def, Lifetime::new(depth, refs)),
@@ -265,7 +270,7 @@ impl<'a> ParseState<'a> {
                     .push(TranspileError::FunctionNamedUnderscore(ident.span.clone()));
             }
             self.bind_unfinished(ident.name);
-            self.push_scope();
+            self.push_function_scope();
             for param in &params {
                 self.bind_param(param.ident.name);
             }
@@ -273,20 +278,22 @@ impl<'a> ParseState<'a> {
         let pair = pairs.next().unwrap();
         let items_span = pair.as_span();
         let items = self.function_body(pair, is_function);
-        if is_function {
-            self.pop_scope();
+        let min_refs = if is_function {
+            self.pop_function_scope()
         } else if ident.is_underscore() {
             let refs = items.last().unwrap().lifetime().refs;
             return Item::Node(
                 NodeKind::Term(Term::Expr(items), items_span).life(self.depth(), refs),
             );
-        }
+        } else {
+            0
+        };
         let def = Def {
             ident,
             params,
             items,
         };
-        self.bind_def(def.clone());
+        self.bind_def(def.clone(), min_refs);
         Item::Def(def)
     }
     fn expr(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
@@ -502,27 +509,40 @@ impl<'a> ParseState<'a> {
         let pair = only(pair);
         let (term, lifetime) = match pair.as_rule() {
             Rule::int => match pair.as_str().parse::<i64>() {
-                Ok(i) => (Term::Int(i), Lifetime::STATIC),
+                Ok(i) => (Term::Int(i), Lifetime::new(self.depth(), 0)),
                 Err(_) => {
                     self.errors
                         .push(TranspileError::InvalidLiteral(pair.as_span()));
-                    (Term::Int(0), Lifetime::STATIC)
+                    (Term::Int(0), Lifetime::new(self.depth(), 0))
                 }
             },
             Rule::real => match pair.as_str().parse::<f64>() {
-                Ok(i) => (Term::Real(i), Lifetime::STATIC),
+                Ok(i) => (Term::Real(i), Lifetime::new(self.depth(), 0)),
                 Err(_) => {
                     self.errors
                         .push(TranspileError::InvalidLiteral(pair.as_span()));
-                    (Term::Real(0.0), Lifetime::STATIC)
+                    (Term::Real(0.0), Lifetime::new(self.depth(), 0))
                 }
             },
             Rule::ident => {
                 let ident = self.ident(pair);
-                let lifetime = if let Some(binding) = self.find_binding(ident.name) {
+                let lifetime = if let Some((_, binding)) = self
+                    .scopes
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find_map(|(fi, fscope)| {
+                        fscope.scopes.iter().rev().find_map(|pscope| {
+                            pscope.bindings.get(ident.name).map(|binding| (fi, binding))
+                        })
+                    }) {
                     let lt = binding.lifetime();
-                    if lt.depth < self.depth() - 1 {
-                        println!("capturing {} at -{}", ident.name, self.depth() - lt.depth);
+                    if lt.depth > 0 && lt.depth < self.depth() {
+                        let affected_scopes = (self.depth() - lt.depth) as usize;
+                        for fscope in self.scopes.iter_mut().rev().take(affected_scopes) {
+                            let min_refs = &mut fscope.min_refs;
+                            *min_refs = (*min_refs).max(lt.depth);
+                        }
                     }
                     lt
                 } else {
@@ -533,9 +553,9 @@ impl<'a> ParseState<'a> {
             }
             Rule::paren_expr => {
                 let pair = only(pair);
-                self.push_scope();
+                self.push_paren_scope();
                 let items = self.items(pair, true);
-                self.pop_scope();
+                self.pop_paren_scope();
                 let lifetime = Lifetime::new(self.depth(), items.last().unwrap().lifetime().refs);
                 (Term::Expr(items), lifetime)
             }
@@ -548,14 +568,17 @@ impl<'a> ParseState<'a> {
                 let mut pairs = pair.into_inner();
                 let params_pairs = pairs.next().unwrap().into_inner();
                 let params: Vec<Param> = params_pairs.map(|pair| self.param(pair)).collect();
-                self.push_scope();
+                self.push_function_scope();
                 for param in &params {
                     self.bind_param(param.ident.name);
                 }
                 let pair = pairs.next().unwrap();
                 let body = self.function_body(pair, true);
-                self.pop_scope();
-                let lifetime = Lifetime::new(self.depth(), body.last().unwrap().lifetime().refs);
+                let min_refs = self.pop_function_scope();
+                let lifetime = Lifetime::new(
+                    self.depth(),
+                    body.last().unwrap().lifetime().refs.max(min_refs),
+                );
                 (
                     Term::Closure(Closure { span, params, body }.into()),
                     lifetime,
