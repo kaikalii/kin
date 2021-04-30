@@ -523,6 +523,7 @@ impl<'a> Transpilation<'a> {
         let inner = self.pop_expr();
         let f = match expr.op {
             UnOp::Neg => "noot_neg",
+            UnOp::Head => "noot_head",
         };
         self.push_expr(format!("{}({})", f, inner))
     }

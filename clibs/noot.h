@@ -120,6 +120,12 @@ static NootValue NOOT_TRUE = new_bool(true);
 // The false Noot value
 static NootValue NOOT_FALSE = new_bool(false);
 
+NootValue noot_head(NootValue val) {
+    val.mom = NULL;
+    val.dad = NULL;
+    return val;
+}
+
 NootValue noot_mom(uint8_t count, NootValue* args) {
     NootValue val = count >= 1 ? args[0] : NOOT_NIL;
     return val.mom ? *val.mom : NOOT_NIL;

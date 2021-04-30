@@ -207,7 +207,8 @@ impl<'a> ParseState<'a> {
         if let Some(last_item) = items.last() {
             if check_ref {
                 if let Item::Node(node) = last_item {
-                    if node.lifetime.refs == self.depth() {
+                    if node.lifetime.refs == self.depth() && self.function_scope().scopes.len() == 1
+                    {
                         self.errors.push(TranspileError::ReturnReferencesLocal(
                             node.kind.span().clone(),
                         ))
@@ -387,7 +388,7 @@ impl<'a> ParseState<'a> {
         let mut pairs = pair.into_inner();
         let left = pairs.next().unwrap();
         let mut span = left.as_span();
-        let mut left = self.expr_not(left);
+        let mut left = self.expr_neg(left);
         for (op, right) in pairs.tuples() {
             let op_span = op.as_span();
             let op = match op.as_str() {
@@ -397,13 +398,13 @@ impl<'a> ParseState<'a> {
                 rule => unreachable!("{:?}", rule),
             };
             span = self.span(span.start(), right.as_span().end());
-            let right = self.expr_not(right);
+            let right = self.expr_neg(right);
             left = NodeKind::BinExpr(BinExpr::new(left, right, op, span.clone(), op_span))
                 .life(self.depth(), 0);
         }
         left
     }
-    fn expr_not(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
+    fn expr_neg(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
         let span = pair.as_span();
         let mut pairs = pair.into_inner();
         let first = pairs.next().unwrap();
@@ -431,10 +432,10 @@ impl<'a> ParseState<'a> {
                 Rule::expr_call_single => {
                     let span = pair.as_span();
                     let mut pairs = pair.into_inner();
-                    let caller = self.expr_dad(pairs.next().unwrap());
+                    let caller = self.expr_head(pairs.next().unwrap());
                     calls.push(CallExpr {
                         caller: caller.into(),
-                        args: pairs.map(|pair| self.expr_dad(pair)).collect(),
+                        args: pairs.map(|pair| self.expr_head(pair)).collect(),
                         span,
                     });
                 }
@@ -465,6 +466,26 @@ impl<'a> ParseState<'a> {
             call_node = NodeKind::Call(chained_call).life(self.depth(), refs);
         }
         call_node
+    }
+    fn expr_head(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
+        let span = pair.as_span();
+        let mut pairs = pair.into_inner();
+        let first = pairs.next().unwrap();
+        let op = match first.as_str() {
+            "!" => Some(UnOp::Head),
+            _ => None,
+        };
+        let inner = if op.is_some() {
+            pairs.next().unwrap()
+        } else {
+            first
+        };
+        let inner = self.expr_dad(inner);
+        if let Some(op) = op {
+            NodeKind::UnExpr(UnExpr::new(inner, op, span)).life(self.depth(), 0)
+        } else {
+            inner
+        }
     }
     fn expr_dad(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
         let mut pairs = pair.into_inner();

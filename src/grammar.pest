@@ -37,7 +37,8 @@ op_and = { "and" }
 op_or = { "or" }
 op_mom = { ":" }
 op_dad = { "::" }
-op_un = { "-" }
+op_neg = { "-" }
+op_head = { "!" }
 
 // Expressions
 paren_expr = { "(" ~ NEWLINE? ~ items ~ NEWLINE? ~ ")" }
@@ -47,11 +48,12 @@ closure = { closure_params ~ (NEWLINE ~ items ~ "end" | expr ~ "end"?)}
 term = { real | int | closure | ident | string | list_literal | tree_literal | paren_expr }
 expr_mom = { term ~ (op_mom ~ term)* }
 expr_dad = { expr_mom ~ (op_dad ~ expr_mom)* }
-expr_call_single = { expr_dad+ }
+expr_head = { op_head? ~ expr_dad }
+expr_call_single = { expr_head+ }
 chain_call = _{ "," ~ NEWLINE? }
 expr_call = { expr_call_single ~ (chain_call ~ expr_call_single)* }
-expr_un = { op_un? ~ expr_call }
-expr_mdr = { expr_un ~ (op_mdr ~ expr_un)* }
+expr_neg = { op_neg? ~ expr_call }
+expr_mdr = { expr_neg ~ (op_mdr ~ expr_neg)* }
 expr_as = { expr_mdr ~ (op_as ~ expr_mdr)* }
 expr_cmp = { expr_as ~ (op_comp ~ expr_as)* }
 expr_and = { expr_cmp ~ (NEWLINE? ~ op_and ~ NEWLINE? ~ expr_cmp)* }
