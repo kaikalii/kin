@@ -432,10 +432,10 @@ impl<'a> ParseState<'a> {
                 Rule::expr_call_single => {
                     let span = pair.as_span();
                     let mut pairs = pair.into_inner();
-                    let caller = self.expr_head(pairs.next().unwrap());
+                    let caller = self.expr_dad(pairs.next().unwrap());
                     calls.push(CallExpr {
                         caller: caller.into(),
-                        args: pairs.map(|pair| self.expr_head(pair)).collect(),
+                        args: pairs.map(|pair| self.expr_dad(pair)).collect(),
                         span,
                     });
                 }
@@ -467,26 +467,6 @@ impl<'a> ParseState<'a> {
         }
         call_node
     }
-    fn expr_head(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
-        let span = pair.as_span();
-        let mut pairs = pair.into_inner();
-        let first = pairs.next().unwrap();
-        let op = match first.as_str() {
-            "!" => Some(UnOp::Head),
-            _ => None,
-        };
-        let inner = if op.is_some() {
-            pairs.next().unwrap()
-        } else {
-            first
-        };
-        let inner = self.expr_dad(inner);
-        if let Some(op) = op {
-            NodeKind::UnExpr(UnExpr::new(inner, op, span)).life(self.depth(), 0)
-        } else {
-            inner
-        }
-    }
     fn expr_dad(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
         let mut pairs = pair.into_inner();
         let dad = pairs.next().unwrap();
@@ -510,7 +490,7 @@ impl<'a> ParseState<'a> {
         let mut pairs = pair.into_inner().rev();
         let mom = pairs.next().unwrap();
         let mut span = mom.as_span();
-        let mut mom = self.term(mom);
+        let mut mom = self.expr_head(mom);
         for (op, head) in pairs.tuples() {
             let op_span = op.as_span();
             let op = match op.as_str() {
@@ -518,12 +498,32 @@ impl<'a> ParseState<'a> {
                 rule => unreachable!("{:?}", rule),
             };
             span = self.span(head.as_span().end(), span.start());
-            let head = self.term(head);
+            let head = self.expr_head(head);
             let refs = mom.lifetime.depth;
             mom = NodeKind::BinExpr(BinExpr::new(head, mom, op, span.clone(), op_span))
                 .life(self.depth(), refs);
         }
         mom
+    }
+    fn expr_head(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
+        let span = pair.as_span();
+        let mut pairs = pair.into_inner();
+        let first = pairs.next().unwrap();
+        let op = match first.as_str() {
+            "!" => Some(UnOp::Head),
+            _ => None,
+        };
+        let inner = if op.is_some() {
+            pairs.next().unwrap()
+        } else {
+            first
+        };
+        let inner = self.term(inner);
+        if let Some(op) = op {
+            NodeKind::UnExpr(UnExpr::new(inner, op, span)).life(self.depth(), 0)
+        } else {
+            inner
+        }
     }
     fn term(&mut self, pair: Pair<'a, Rule>) -> Node<'a> {
         let span = pair.as_span();
