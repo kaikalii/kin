@@ -18,7 +18,7 @@ fn main() {
     let app = App::parse();
 
     // Parse and check
-    let input = std::fs::read_to_string("test.noot").unwrap();
+    let input = std::fs::read_to_string("test.kin").unwrap();
     let items = match parse::parse(&input) {
         Ok(items) => items,
         Err(errors) => {

@@ -1,5 +1,5 @@
-#ifndef NOOT_VALUE_H
-#define NOOT_VALUE_H
+#ifndef KIN_VALUE_H
+#define KIN_VALUE_H
 
 #include <math.h>
 #include <stdio.h>
@@ -8,46 +8,46 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-static char** noot_call_stack = NULL;
-static size_t noot_call_stack_len = 0;
-static size_t noot_call_stack_capacity = 0;
+static char** kin_call_stack = NULL;
+static size_t kin_call_stack_len = 0;
+static size_t kin_call_stack_capacity = 0;
 
 #ifndef min
 #define min(a, b) a < b ? a : b
 #endif
 
-void noot_push_call_stack(char* call_string) {
-    size_t new_len = noot_call_stack_len + 1;
-    if (new_len >= noot_call_stack_capacity) {
-        noot_call_stack_capacity = noot_call_stack_capacity == 0 ? 1 : noot_call_stack_capacity * 2;
-        noot_call_stack = (char**)realloc(noot_call_stack, noot_call_stack_capacity * sizeof(char*));
+void kin_push_call_stack(char* call_string) {
+    size_t new_len = kin_call_stack_len + 1;
+    if (new_len >= kin_call_stack_capacity) {
+        kin_call_stack_capacity = kin_call_stack_capacity == 0 ? 1 : kin_call_stack_capacity * 2;
+        kin_call_stack = (char**)realloc(kin_call_stack, kin_call_stack_capacity * sizeof(char*));
     }
-    noot_call_stack[noot_call_stack_len] = call_string;
-    noot_call_stack_len = new_len;
+    kin_call_stack[kin_call_stack_len] = call_string;
+    kin_call_stack_len = new_len;
 }
 
-void noot_pop_call_stack() {
-    noot_call_stack_len -= 1;
+void kin_pop_call_stack() {
+    kin_call_stack_len -= 1;
 }
 
-void noot_panic_impl(char* message) {
+void kin_panic_impl(char* message) {
     printf("%s\n", message);
-    for (int i = noot_call_stack_len - 1; i >= 0; i--)
-        printf("at %s\n", noot_call_stack[i]);
+    for (int i = kin_call_stack_len - 1; i >= 0; i--)
+        printf("at %s\n", kin_call_stack[i]);
     exit(EXIT_FAILURE);
 }
 
 // The type of a byte
 typedef unsigned char byte;
 
-// The Noot string representation
-typedef struct NootString {
+// The Kin string representation
+typedef struct KinString {
     char* s;
     size_t len;
-} NootString;
+} KinString;
 
-// Noot types
-typedef enum NootType {
+// Kin types
+typedef enum KinType {
     Nil,
     Bool,
     Int,
@@ -56,9 +56,9 @@ typedef enum NootType {
     Function,
     Closure,
     Error,
-} NootType;
+} KinType;
 
-static char* noot_type_names[] = {
+static char* kin_type_names[] = {
     "nil",
     "bool",
     "int",
@@ -71,109 +71,109 @@ static char* noot_type_names[] = {
 
 // Foward declarations
 
-typedef struct NootValue NootValue;
+typedef struct KinValue KinValue;
 
-// The function pointer type for regular Noot functions
-typedef NootValue(*NootFn)(uint8_t, NootValue* args);
-// The function pointer type for Noot closures
-typedef NootValue(*NootClosureFn)(uint8_t, NootValue* args, NootValue* captures);
+// The function pointer type for regular Kin functions
+typedef KinValue(*KinFn)(uint8_t, KinValue* args);
+// The function pointer type for Kin closures
+typedef KinValue(*KinClosureFn)(uint8_t, KinValue* args, KinValue* captures);
 
-// A Noot closure
-typedef struct NootFunction {
-    NootValue* captures;
-    NootClosureFn f;
-} NootFunction;
+// A Kin closure
+typedef struct KinFunction {
+    KinValue* captures;
+    KinClosureFn f;
+} KinFunction;
 
-// The data of a Noot value
-typedef union NootData {
+// The data of a Kin value
+typedef union KinData {
     bool Bool;
     unsigned long Nat;
     long Int;
     double Real;
-    NootString String;
-    NootFn Function;
-    NootFunction Closure;
-    struct NootValue* Error;
-} NootData;
+    KinString String;
+    KinFn Function;
+    KinFunction Closure;
+    struct KinValue* Error;
+} KinData;
 
-// A noot value with a type and data
-struct NootValue {
-    NootType type;
-    NootData data;
-    NootValue* mom;
-    NootValue* dad;
+// A kin value with a type and data
+struct KinValue {
+    KinType type;
+    KinData data;
+    KinValue* mom;
+    KinValue* dad;
 };
 
-#define new_val(_type, ...) (NootValue) { .type = _type, .data = {._type = __VA_ARGS__}, .mom = NULL, .dad = NULL }
+#define new_val(_type, ...) (KinValue) { .type = _type, .data = {._type = __VA_ARGS__}, .mom = NULL, .dad = NULL }
 #define new_bool(b) new_val(Bool, b)
 #define new_int(i) new_val(Int, i)
 #define new_real(i) new_val(Real, i)
 #define new_function(f) new_val(Function, f)
 #define new_closure(function, caps) new_val(Closure, { .f = function, .captures = caps })
-#define new_noot_string(string, l) (NootString) { .s = string, .len = l }
-#define new_string(s, len) new_val(String, new_noot_string(s, len))
+#define new_kin_string(string, l) (KinString) { .s = string, .len = l }
+#define new_string(s, len) new_val(String, new_kin_string(s, len))
 
-// The nil Noot value
-static NootValue NOOT_NIL = { .type = Nil, .mom = NULL, .dad = NULL };
-// The true Noot value
-static NootValue NOOT_TRUE = new_bool(true);
-// The false Noot value
-static NootValue NOOT_FALSE = new_bool(false);
+// The nil Kin value
+static KinValue KIN_NIL = { .type = Nil, .mom = NULL, .dad = NULL };
+// The true Kin value
+static KinValue KIN_TRUE = new_bool(true);
+// The false Kin value
+static KinValue KIN_FALSE = new_bool(false);
 
-NootValue noot_head(NootValue val) {
+KinValue kin_head(KinValue val) {
     val.mom = NULL;
     val.dad = NULL;
     return val;
 }
 
-NootValue noot_mom(uint8_t count, NootValue* args) {
-    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
-    return val.mom ? *val.mom : NOOT_NIL;
+KinValue kin_mom(uint8_t count, KinValue* args) {
+    KinValue val = count >= 1 ? args[0] : KIN_NIL;
+    return val.mom ? *val.mom : KIN_NIL;
 }
 
-NootValue noot_dad(uint8_t count, NootValue* args) {
-    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
-    return val.dad ? *val.dad : NOOT_NIL;
+KinValue kin_dad(uint8_t count, KinValue* args) {
+    KinValue val = count >= 1 ? args[0] : KIN_NIL;
+    return val.dad ? *val.dad : KIN_NIL;
 }
 
-void noot_binary_type_panic(char* message, NootType a, NootType b) {
+void kin_binary_type_panic(char* message, KinType a, KinType b) {
     char str[256];
-    sprintf(str, message, noot_type_names[a], noot_type_names[b]);
-    noot_panic_impl(str);
+    sprintf(str, message, kin_type_names[a], kin_type_names[b]);
+    kin_panic_impl(str);
 }
 
-void noot_unary_type_panic(char* message, NootType ty) {
+void kin_unary_type_panic(char* message, KinType ty) {
     char str[256];
-    sprintf(str, message, noot_type_names[ty]);
-    noot_panic_impl(str);
+    sprintf(str, message, kin_type_names[ty]);
+    kin_panic_impl(str);
 }
 
-// Create a new Noot error from a value
-NootValue noot_error(uint8_t count, NootValue* inner) {
+// Create a new Kin error from a value
+KinValue kin_error(uint8_t count, KinValue* inner) {
     return new_val(Error, inner);
 }
 
-// Call a Noot function or closure value
-NootValue noot_call(NootValue val, int count, NootValue* args, char* call_site) {
-    noot_push_call_stack(call_site);
-    NootValue res;
+// Call a Kin function or closure value
+KinValue kin_call(KinValue val, int count, KinValue* args, char* call_site) {
+    kin_push_call_stack(call_site);
+    KinValue res;
     switch (val.type) {
     case Function:;
         res = (*val.data.Function)(count, args);
-        noot_pop_call_stack();
+        kin_pop_call_stack();
         return res;
     case Closure:;
         res = (*val.data.Closure.f)(count, args, val.data.Closure.captures);
-        noot_pop_call_stack();
+        kin_pop_call_stack();
         return res;
     default:
-        noot_unary_type_panic("Attempted to call %s value", val.type);
-        return NOOT_NIL;
+        kin_unary_type_panic("Attempted to call %s value", val.type);
+        return KIN_NIL;
     }
 }
 
-NootValue noot_print(uint8_t count, NootValue* args) {
-    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
+KinValue kin_print(uint8_t count, KinValue* args) {
+    KinValue val = count >= 1 ? args[0] : KIN_NIL;
     switch (val.type) {
     case Nil:
         printf("nil");
@@ -204,33 +204,33 @@ NootValue noot_print(uint8_t count, NootValue* args) {
         break;
     case Error:
         printf("Error: ");
-        noot_print(1, val.data.Error);
+        kin_print(1, val.data.Error);
         break;
     }
     return val;
 }
 
-NootValue noot_println(uint8_t count, NootValue* args) {
-    NootValue res = noot_print(count, args);
+KinValue kin_println(uint8_t count, KinValue* args) {
+    KinValue res = kin_print(count, args);
     printf("\n");
     return res;
 }
 
-NootValue noot_panic(uint8_t count, NootValue* args) {
-    printf("\nNoot panicked:\n");
-    noot_println(count, args);
-    noot_panic_impl("");
-    return NOOT_NIL;
+KinValue kin_panic(uint8_t count, KinValue* args) {
+    printf("\nKin panicked:\n");
+    kin_println(count, args);
+    kin_panic_impl("");
+    return KIN_NIL;
 }
 
-NootValue noot_call_bin_op(NootValue f(NootValue, NootValue), NootValue a, NootValue b, char* call_site) {
-    noot_push_call_stack(call_site);
-    NootValue res = f(a, b);
-    noot_pop_call_stack();
+KinValue kin_call_bin_op(KinValue f(KinValue, KinValue), KinValue a, KinValue b, char* call_site) {
+    kin_push_call_stack(call_site);
+    KinValue res = f(a, b);
+    kin_pop_call_stack();
     return res;
 }
 
-NootValue noot_add(NootValue a, NootValue b) {
+KinValue kin_add(KinValue a, KinValue b) {
     switch (a.type) {
     case Int:
         switch (b.type) {
@@ -250,11 +250,11 @@ NootValue noot_add(NootValue a, NootValue b) {
         }
     default: break;
     }
-    noot_binary_type_panic("Attempted to add incompatible types %s and %s", a.type, b.type);
-    return NOOT_NIL;
+    kin_binary_type_panic("Attempted to add incompatible types %s and %s", a.type, b.type);
+    return KIN_NIL;
 }
 
-NootValue noot_sub(NootValue a, NootValue b) {
+KinValue kin_sub(KinValue a, KinValue b) {
     switch (a.type) {
     case Int:
         switch (b.type) {
@@ -274,11 +274,11 @@ NootValue noot_sub(NootValue a, NootValue b) {
         }
     default: break;
     }
-    noot_binary_type_panic("Attempted to subtract incompatible types %s and %s", a.type, b.type);
-    return NOOT_NIL;
+    kin_binary_type_panic("Attempted to subtract incompatible types %s and %s", a.type, b.type);
+    return KIN_NIL;
 }
 
-NootValue noot_mul(NootValue a, NootValue b) {
+KinValue kin_mul(KinValue a, KinValue b) {
     switch (a.type) {
     case Int:
         switch (b.type) {
@@ -298,11 +298,11 @@ NootValue noot_mul(NootValue a, NootValue b) {
         }
     default: break;
     }
-    noot_binary_type_panic("Attempted to subtract multiply types %s and %s", a.type, b.type);
-    return NOOT_NIL;
+    kin_binary_type_panic("Attempted to subtract multiply types %s and %s", a.type, b.type);
+    return KIN_NIL;
 }
 
-NootValue noot_div(NootValue a, NootValue b) {
+KinValue kin_div(KinValue a, KinValue b) {
     switch (a.type) {
     case Int:
         switch (b.type) {
@@ -322,11 +322,11 @@ NootValue noot_div(NootValue a, NootValue b) {
         }
     default: break;
     }
-    noot_binary_type_panic("Attempted to divide incompatible types %s and %s", a.type, b.type);
-    return NOOT_NIL;
+    kin_binary_type_panic("Attempted to divide incompatible types %s and %s", a.type, b.type);
+    return KIN_NIL;
 }
 
-NootValue noot_rem(NootValue a, NootValue b) {
+KinValue kin_rem(KinValue a, KinValue b) {
     switch (a.type) {
     case Int:
         switch (b.type) {
@@ -346,17 +346,17 @@ NootValue noot_rem(NootValue a, NootValue b) {
         }
     default: break;
     }
-    noot_binary_type_panic("Attempted to divide incompatible types %s and %s", a.type, b.type);
-    return NOOT_NIL;
+    kin_binary_type_panic("Attempted to divide incompatible types %s and %s", a.type, b.type);
+    return KIN_NIL;
 }
 
-#define bin_fn(f) NootValue f## _fn(uint8_t count, NootValue* args) {  \
-    NootValue left = count >= 1 ? args[0] : NOOT_NIL; \
-    NootValue right = count >= 2 ? args[1] : NOOT_NIL; \
+#define bin_fn(f) KinValue f## _fn(uint8_t count, KinValue* args) {  \
+    KinValue left = count >= 1 ? args[0] : KIN_NIL; \
+    KinValue right = count >= 2 ? args[1] : KIN_NIL; \
     return f(left, right); \
 }
 
-bool noot_eq_impl(NootValue a, NootValue b) {
+bool kin_eq_impl(KinValue a, KinValue b) {
     switch (a.type) {
     case Nil: return b.type == Nil;
     case Bool: return b.type == Bool && a.data.Bool == b.data.Bool;
@@ -385,12 +385,12 @@ bool noot_eq_impl(NootValue a, NootValue b) {
         else return false;
     case Function: return b.type == Function && a.data.Function == b.data.Function;
     case Closure: return b.type == Closure && a.data.Closure.f == b.data.Closure.f;
-    case Error: return b.type == Error && noot_eq_impl(*a.data.Error, *b.data.Error);
+    case Error: return b.type == Error && kin_eq_impl(*a.data.Error, *b.data.Error);
     default: return false;
     }
 }
 
-bool noot_lt_impl(NootValue a, NootValue b) {
+bool kin_lt_impl(KinValue a, KinValue b) {
     switch (a.type) {
     case Bool: if (b.type == Bool) return a.data.Bool < b.data.Bool; break;
     case Int:
@@ -417,14 +417,14 @@ bool noot_lt_impl(NootValue a, NootValue b) {
         break;
     case Function: if (b.type == Function) return (size_t)a.data.Function < (size_t)b.data.Function; break;
     case Closure: if (b.type == Closure) return (size_t)a.data.Closure.f < (size_t)b.data.Closure.f; break;
-    case Error: if (b.type == Error) return noot_eq_impl(*a.data.Error, *b.data.Error); break;
+    case Error: if (b.type == Error) return kin_eq_impl(*a.data.Error, *b.data.Error); break;
     default: break;
     }
-    noot_binary_type_panic("Attempted to compare incompatible types %s and %s", a.type, b.type);
+    kin_binary_type_panic("Attempted to compare incompatible types %s and %s", a.type, b.type);
     return false;
 }
 
-bool noot_gt_impl(NootValue a, NootValue b) {
+bool kin_gt_impl(KinValue a, KinValue b) {
     switch (a.type) {
     case Bool: if (b.type == Bool) return a.data.Bool > b.data.Bool; break;
     case Int:
@@ -451,74 +451,74 @@ bool noot_gt_impl(NootValue a, NootValue b) {
         break;
     case Function: if (b.type == Function) return (size_t)a.data.Function > (size_t)b.data.Function; break;
     case Closure: if (b.type == Closure) return (size_t)a.data.Closure.f > (size_t)b.data.Closure.f; break;
-    case Error: if (b.type == Error) return noot_eq_impl(*a.data.Error, *b.data.Error); break;
+    case Error: if (b.type == Error) return kin_eq_impl(*a.data.Error, *b.data.Error); break;
     default: break;
     }
-    noot_binary_type_panic("Attempted to compare incompatible types %s and %s", a.type, b.type);
+    kin_binary_type_panic("Attempted to compare incompatible types %s and %s", a.type, b.type);
     return false;
 }
 
-NootValue noot_eq(NootValue a, NootValue b) {
-    return new_bool(noot_eq_impl(a, b));
+KinValue kin_eq(KinValue a, KinValue b) {
+    return new_bool(kin_eq_impl(a, b));
 }
 
-NootValue noot_neq(NootValue a, NootValue b) {
-    return new_bool(!noot_eq_impl(a, b));
+KinValue kin_neq(KinValue a, KinValue b) {
+    return new_bool(!kin_eq_impl(a, b));
 }
 
-NootValue noot_lt(NootValue a, NootValue b) {
-    return new_bool(noot_lt_impl(a, b));
+KinValue kin_lt(KinValue a, KinValue b) {
+    return new_bool(kin_lt_impl(a, b));
 }
 
-NootValue noot_le(NootValue a, NootValue b) {
-    return new_bool(noot_lt_impl(a, b) || noot_eq_impl(a, b));
+KinValue kin_le(KinValue a, KinValue b) {
+    return new_bool(kin_lt_impl(a, b) || kin_eq_impl(a, b));
 }
 
-NootValue noot_gt(NootValue a, NootValue b) {
-    return new_bool(noot_gt_impl(a, b));
+KinValue kin_gt(KinValue a, KinValue b) {
+    return new_bool(kin_gt_impl(a, b));
 }
 
-NootValue noot_ge(NootValue a, NootValue b) {
-    return new_bool(noot_gt_impl(a, b) || noot_eq_impl(a, b));
+KinValue kin_ge(KinValue a, KinValue b) {
+    return new_bool(kin_gt_impl(a, b) || kin_eq_impl(a, b));
 }
 
-bin_fn(noot_add);
-bin_fn(noot_sub);
-bin_fn(noot_mul);
-bin_fn(noot_div);
-bin_fn(noot_rem);
-bin_fn(noot_eq);
-bin_fn(noot_neq);
-bin_fn(noot_lt);
-bin_fn(noot_le);
-bin_fn(noot_gt);
-bin_fn(noot_ge);
+bin_fn(kin_add);
+bin_fn(kin_sub);
+bin_fn(kin_mul);
+bin_fn(kin_div);
+bin_fn(kin_rem);
+bin_fn(kin_eq);
+bin_fn(kin_neq);
+bin_fn(kin_lt);
+bin_fn(kin_le);
+bin_fn(kin_gt);
+bin_fn(kin_ge);
 
-NootValue noot_neg(NootValue val) {
+KinValue kin_neg(KinValue val) {
     switch (val.type) {
     case Int: return new_int(-val.data.Int);
     case Real: return new_real(-val.data.Real);
     default:
-        noot_unary_type_panic("Attempted to negate %s", val.type);
-        return NOOT_NIL;
+        kin_unary_type_panic("Attempted to negate %s", val.type);
+        return KIN_NIL;
     }
 }
 
-NootValue noot_not(uint8_t count, NootValue* args) {
-    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
+KinValue kin_not(uint8_t count, KinValue* args) {
+    KinValue val = count >= 1 ? args[0] : KIN_NIL;
     if (val.type == Bool) return new_bool(!val.data.Bool);
     else return new_bool(val.type == Nil);
 }
 
-bool noot_is_true(NootValue val) {
+bool kin_is_true(KinValue val) {
     return (val.type == Bool) * val.data.Bool + (val.type != Bool) * (val.type != Nil && val.type != Error);
 }
 
-NootValue noot_assert(uint8_t count, NootValue* args) {
-    NootValue val = count >= 1 ? args[0] : NOOT_NIL;
-    if (!noot_is_true(val)) {
-        if (count >= 2) noot_panic(count - 1, args + 1);
-        else noot_panic(count, args);
+KinValue kin_assert(uint8_t count, KinValue* args) {
+    KinValue val = count >= 1 ? args[0] : KIN_NIL;
+    if (!kin_is_true(val)) {
+        if (count >= 2) kin_panic(count - 1, args + 1);
+        else kin_panic(count, args);
     }
     return val;
 }

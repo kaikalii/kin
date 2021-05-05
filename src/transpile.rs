@@ -10,14 +10,14 @@ use rpds::{RedBlackTreeMap, Vector};
 
 use crate::ast::*;
 
-struct NootDef {
+struct KinDef {
     is_function: bool,
     c_name: String,
 }
 
 macro_rules! builtin_functions {
-    ($($name:literal),* $(,($noot_name:literal, $c_text:literal))* $(,)?) => {
-        &[$(($name, concat!("noot_", $name))),* $(,($noot_name, $c_text))*]
+    ($($name:literal),* $(,($kin_name:literal, $c_text:literal))* $(,)?) => {
+        &[$(($name, concat!("kin_", $name))),* $(,($kin_name, $c_text))*]
     }
 }
 
@@ -30,23 +30,23 @@ pub const BUILTIN_FUNCTIONS: &[(&str, &str)] = builtin_functions!(
     "panic",
     "not",
     "assert",
-    ("add", "noot_add_fn"),
-    ("sub", "noot_sub_fn"),
-    ("mul", "noot_mul_fn"),
-    ("div", "noot_div_fn"),
-    ("rem", "noot_rem_fn"),
-    ("eq", "noot_eq_fn"),
-    ("ne", "noot_ne_fn"),
-    ("lt", "noot_lt_fn"),
-    ("le", "noot_le_fn"),
-    ("gt", "noot_gt_fn"),
-    ("ge", "noot_ge_fn"),
+    ("add", "kin_add_fn"),
+    ("sub", "kin_sub_fn"),
+    ("mul", "kin_mul_fn"),
+    ("div", "kin_div_fn"),
+    ("rem", "kin_rem_fn"),
+    ("eq", "kin_eq_fn"),
+    ("ne", "kin_ne_fn"),
+    ("lt", "kin_lt_fn"),
+    ("le", "kin_le_fn"),
+    ("gt", "kin_gt_fn"),
+    ("ge", "kin_ge_fn"),
 );
 pub const BUILTIN_VALUES: &[(&str, &str)] = &[
-    ("_", "NOOT_NIL"),
-    ("nil", "NOOT_NIL"),
-    ("true", "NOOT_TRUE"),
-    ("false", "NOOT_FALSE"),
+    ("_", "KIN_NIL"),
+    ("nil", "KIN_NIL"),
+    ("true", "KIN_TRUE"),
+    ("false", "KIN_FALSE"),
 ];
 
 static RESERVED_NAMES: &[&str] = &[
@@ -93,28 +93,28 @@ static RESERVED_NAMES: &[&str] = &[
 
 #[derive(Clone)]
 struct TranspileStack<'a> {
-    noot_scopes: Vector<RedBlackTreeMap<&'a str, NootDef>>,
+    kin_scopes: Vector<RedBlackTreeMap<&'a str, KinDef>>,
 }
 
 impl<'a> TranspileStack<'a> {
     pub fn new() -> Self {
         TranspileStack {
-            noot_scopes: Vector::new().push_back(
+            kin_scopes: Vector::new().push_back(
                 BUILTIN_FUNCTIONS
                     .iter()
-                    .map(|&(noot_name, c_name)| {
+                    .map(|&(kin_name, c_name)| {
                         (
-                            noot_name,
-                            NootDef {
+                            kin_name,
+                            KinDef {
                                 c_name: c_name.into(),
                                 is_function: true,
                             },
                         )
                     })
-                    .chain(BUILTIN_VALUES.iter().map(|&(noot_name, c_name)| {
+                    .chain(BUILTIN_VALUES.iter().map(|&(kin_name, c_name)| {
                         (
-                            noot_name,
-                            NootDef {
+                            kin_name,
+                            KinDef {
                                 c_name: c_name.into(),
                                 is_function: false,
                             },
@@ -124,13 +124,13 @@ impl<'a> TranspileStack<'a> {
             ),
         }
     }
-    pub fn with_noot_def(self, name: &'a str, def: NootDef) -> Self {
+    pub fn with_kin_def(self, name: &'a str, def: KinDef) -> Self {
         TranspileStack {
-            noot_scopes: self
-                .noot_scopes
+            kin_scopes: self
+                .kin_scopes
                 .set(
-                    self.noot_scopes.len() - 1,
-                    self.noot_scopes.last().unwrap().insert(name, def),
+                    self.kin_scopes.len() - 1,
+                    self.kin_scopes.last().unwrap().insert(name, def),
                 )
                 .unwrap(),
         }
@@ -145,7 +145,7 @@ pub struct Transpilation<'a> {
 
 #[derive(Clone)]
 struct CFunction<'a> {
-    noot_name: &'a str,
+    kin_name: &'a str,
     exprs: VecDeque<String>,
     lines: Vec<CLine>,
     captures: Vec<CCapture>,
@@ -153,9 +153,9 @@ struct CFunction<'a> {
 }
 
 impl<'a> CFunction<'a> {
-    pub fn new(noot_name: &'a str) -> CFunction {
+    pub fn new(kin_name: &'a str) -> CFunction {
         CFunction {
-            noot_name,
+            kin_name,
             exprs: Default::default(),
             lines: Default::default(),
             captures: Default::default(),
@@ -176,7 +176,7 @@ struct CLine {
 impl CLine {
     fn name(&mut self, name: impl Into<String>) -> &mut Self {
         self.var_name = Some(name.into());
-        self.type_name = Some("NootValue");
+        self.type_name = Some("KinValue");
         self
     }
     fn no_semicolon(&mut self) -> &mut Self {
@@ -261,7 +261,7 @@ impl<'a> Transpilation<'a> {
         let mut source = File::create("build/main.c")?;
 
         // Write headers
-        writeln!(source, "#include \"../clibs/noot.h\"")?;
+        writeln!(source, "#include \"../clibs/kin.h\"")?;
         writeln!(source)?;
 
         // Write function declarations
@@ -269,13 +269,13 @@ impl<'a> Transpilation<'a> {
             if cf.captures.is_empty() {
                 writeln!(
                     source,
-                    "NootValue {}(uint8_t count, NootValue* args);",
+                    "KinValue {}(uint8_t count, KinValue* args);",
                     name
                 )?;
             } else {
                 writeln!(
                     source,
-                    "NootValue {}(uint8_t count, NootValue* args, NootValue* captures);",
+                    "KinValue {}(uint8_t count, KinValue* args, KinValue* captures);",
                     name
                 )?;
             }
@@ -291,13 +291,13 @@ impl<'a> Transpilation<'a> {
             } else if cf.captures.is_empty() {
                 writeln!(
                     source,
-                    "NootValue {}(uint8_t count, NootValue* args) {{",
+                    "KinValue {}(uint8_t count, KinValue* args) {{",
                     name
                 )?;
             } else {
                 writeln!(
                     source,
-                    "NootValue {}(uint8_t count, NootValue* args, NootValue* captures) {{",
+                    "KinValue {}(uint8_t count, KinValue* args, KinValue* captures) {{",
                     name
                 )?;
             }
@@ -341,21 +341,21 @@ impl<'a> Transpilation<'a> {
                     .filter_map(|cf| cf.var_name.as_ref())
                     .any(|var_name| var_name == c_name)
     }
-    fn c_name_for(&self, noot_name: &str, function: bool) -> String {
-        let mut c_name = noot_name.to_owned();
-        if c_name.starts_with("noot") || c_name.starts_with("Noot") {
+    fn c_name_for(&self, kin_name: &str, function: bool) -> String {
+        let mut c_name = kin_name.to_owned();
+        if c_name.starts_with("kin") || c_name.starts_with("Kin") {
             c_name = "_".to_owned() + &c_name;
         }
         let mut i = 1;
         while self.c_name_exists(&c_name, function) {
             i += 1;
-            c_name = format!("{}_{}", noot_name, i);
+            c_name = format!("{}_{}", kin_name, i);
         }
         c_name
     }
-    fn start_c_function(&mut self, c_name: String, noot_name: &'a str) {
+    fn start_c_function(&mut self, c_name: String, kin_name: &'a str) {
         self.functions
-            .insert(c_name.clone(), CFunction::new(noot_name));
+            .insert(c_name.clone(), CFunction::new(kin_name));
         self.function_stack.push(c_name);
     }
     fn finish_c_function(&mut self) {
@@ -364,7 +364,7 @@ impl<'a> Transpilation<'a> {
             .exprs
             .front()
             .cloned()
-            .unwrap_or_else(|| "NOOT_NIL".into());
+            .unwrap_or_else(|| "KIN_NIL".into());
         cf.exprs.pop_front().unwrap();
         cf.push_line(format!("return {}", ret_expr));
         self.function_stack.pop().unwrap();
@@ -388,7 +388,7 @@ impl<'a> Transpilation<'a> {
     fn pop_expr(&mut self) -> String {
         self.c_function()
             .pop_expr()
-            .unwrap_or_else(|| "NOOT_NIL".into())
+            .unwrap_or_else(|| "KIN_NIL".into())
     }
     fn items(&mut self, items: Items<'a>, mut stack: TranspileStack<'a>) {
         let item_count = items.len();
@@ -417,9 +417,9 @@ impl<'a> Transpilation<'a> {
         let c_name = self.c_name_for(&def.ident.name, def.is_function());
         if def.is_function() {
             // Function
-            let stack = stack.with_noot_def(
+            let stack = stack.with_kin_def(
                 def.ident.name,
-                NootDef {
+                KinDef {
                     c_name: c_name.clone(),
                     is_function: true,
                 },
@@ -434,9 +434,9 @@ impl<'a> Transpilation<'a> {
             if let Some(line) = line {
                 cf.push_line(line).name(c_name.clone());
             }
-            stack.with_noot_def(
+            stack.with_kin_def(
                 def.ident.name,
-                NootDef {
+                KinDef {
                     c_name,
                     is_function: false,
                 },
@@ -461,7 +461,7 @@ impl<'a> Transpilation<'a> {
                 let cf = self.c_function();
                 cf.push_line(left).name(&temp_name);
                 cf.push_line(format!(
-                    "if ({}noot_is_true({})) {{",
+                    "if ({}kin_is_true({})) {{",
                     if or { "!" } else { "" },
                     temp_name
                 ))
@@ -492,25 +492,25 @@ impl<'a> Transpilation<'a> {
                 cf.push_expr(head_name);
                 return;
             }
-            BinOp::Equals => ("noot_eq", false),
-            BinOp::NotEquals => ("noot_neq", false),
-            BinOp::Less => ("noot_lt", true),
-            BinOp::LessOrEqual => ("noot_le", true),
-            BinOp::Greater => ("noot_gt", true),
-            BinOp::GreaterOrEqual => ("noot_ge", true),
-            BinOp::Add => ("noot_add", true),
-            BinOp::Sub => ("noot_sub", true),
-            BinOp::Mul => ("noot_mul", true),
-            BinOp::Div => ("noot_div", true),
-            BinOp::Rem => ("noot_rem", true),
+            BinOp::Equals => ("kin_eq", false),
+            BinOp::NotEquals => ("kin_neq", false),
+            BinOp::Less => ("kin_lt", true),
+            BinOp::LessOrEqual => ("kin_le", true),
+            BinOp::Greater => ("kin_gt", true),
+            BinOp::GreaterOrEqual => ("kin_ge", true),
+            BinOp::Add => ("kin_add", true),
+            BinOp::Sub => ("kin_sub", true),
+            BinOp::Mul => ("kin_mul", true),
+            BinOp::Div => ("kin_div", true),
+            BinOp::Rem => ("kin_rem", true),
         };
         self.node(*expr.right, stack);
         let right = self.pop_expr();
         if can_fail {
-            let function_name = &self.curr_c_function().noot_name;
+            let function_name = &self.curr_c_function().kin_name;
             let (line, col) = expr.op_span.split().0.line_col();
             let call_line = format!(
-                "noot_call_bin_op({}, {}, {}, \"{} {}:{}\")",
+                "kin_call_bin_op({}, {}, {}, \"{} {}:{}\")",
                 f, left, right, function_name, line, col
             );
             self.push_expr(call_line)
@@ -522,8 +522,8 @@ impl<'a> Transpilation<'a> {
         self.node(*expr.inner, stack);
         let inner = self.pop_expr();
         let f = match expr.op {
-            UnOp::Neg => "noot_neg",
-            UnOp::Head => "noot_head",
+            UnOp::Neg => "kin_neg",
+            UnOp::Head => "kin_head",
         };
         self.push_expr(format!("{}({})", f, inner))
     }
@@ -537,15 +537,15 @@ impl<'a> Transpilation<'a> {
         }
         let param_count = params.len();
         let params: String = params.into_iter().intersperse(", ".into()).collect();
-        let function_name = &self.curr_c_function().noot_name;
+        let function_name = &self.curr_c_function().kin_name;
         let (line, col) = call.span.split().0.line_col();
         let params = if param_count == 1 {
             format!("&{}", params)
         } else {
-            format!("(NootValue[]) {{ {} }}", params)
+            format!("(KinValue[]) {{ {} }}", params)
         };
         let call_line = format!(
-            "noot_call({}, {}, {}, \"{} {}:{}\")",
+            "kin_call({}, {}, {}, \"{} {}:{}\")",
             f, param_count, params, function_name, line, col
         );
         self.push_expr(call_line)
@@ -592,7 +592,7 @@ impl<'a> Transpilation<'a> {
             }
             Term::Ident(ident) => {
                 if let Some(def) = stack
-                    .noot_scopes
+                    .kin_scopes
                     .iter()
                     .rev()
                     .find_map(|scope| scope.get(ident.name))
@@ -662,7 +662,7 @@ impl<'a> Transpilation<'a> {
                     }
                 } else if let Some(&(_, c_name)) = BUILTIN_VALUES
                     .iter()
-                    .find(|(noot_name, _)| noot_name == &ident.name)
+                    .find(|(kin_name, _)| kin_name == &ident.name)
                 {
                     self.push_expr(c_name.into())
                 } else {
@@ -674,25 +674,25 @@ impl<'a> Transpilation<'a> {
     fn function(
         &mut self,
         c_name: String,
-        noot_name: &'a str,
+        kin_name: &'a str,
         params: Params<'a>,
         items: Items<'a>,
         stack: TranspileStack<'a>,
     ) {
-        self.start_c_function(c_name.clone(), noot_name);
+        self.start_c_function(c_name.clone(), kin_name);
         let cf = self.c_function();
         for i in 0..params.len() {
-            cf.push_line(format!("{i} < count ? &args[{i}] : &NOOT_NIL", i = i))
+            cf.push_line(format!("{i} < count ? &args[{i}] : &KIN_NIL", i = i))
                 .name(format!("{}_arg{}", c_name, i))
-                .ty("NootValue*");
+                .ty("KinValue*");
         }
         let stack = params
             .into_iter()
             .enumerate()
             .fold(stack, |stack, (i, param)| {
-                stack.with_noot_def(
+                stack.with_kin_def(
                     param.ident.name,
-                    NootDef {
+                    KinDef {
                         c_name: format!("*{}_arg{}", c_name, i),
                         is_function: false,
                     },
@@ -709,7 +709,7 @@ impl<'a> Transpilation<'a> {
         let captures_name = format!("{}_captures", c_name);
         let closure_name = format!("{}_closure", c_name);
         self.c_function()
-            .push_line(format!("NootValue {}[{}]", captures_name, captures.len()));
+            .push_line(format!("KinValue {}[{}]", captures_name, captures.len()));
         let cf = self.c_function();
         for (i, cap) in captures.iter().enumerate() {
             cf.push_line(&cap.capture_name)

@@ -77,10 +77,10 @@ static FORBIDDEN_REDIFINITIONS: &[&str] = &["nil", "true", "false"];
 
 #[derive(pest_derive::Parser)]
 #[grammar = "grammar.pest"]
-struct NootParser;
+struct KinParser;
 
 pub fn parse(input: &str) -> Result<Items, Vec<TranspileError>> {
-    match NootParser::parse(Rule::file, input) {
+    match KinParser::parse(Rule::file, input) {
         Ok(mut pairs) => {
             let mut state = ParseState {
                 input,

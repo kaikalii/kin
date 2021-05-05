@@ -1,8 +1,8 @@
 # Types
 
-Noot is a dynamically-typed language. Types are evaluated at runtime to determine operations
+Kin is a dynamically-typed language. Types are evaluated at runtime to determine operations
 
-The possible types for a Noot value are as follows:
+The possible types for a Kin value are as follows:
 
 - Nil
     - Equivalent to null in other languages
@@ -29,7 +29,7 @@ The possible types for a Noot value are as follows:
 
 # Call expressions
 
-Values of most Noot types can be called as if they are functions. The value at the beginning of the call expression is used as the caller.
+Values of most Kin types can be called as if they are functions. The value at the beginning of the call expression is used as the caller.
 
 The rules for calls are as follows:
 

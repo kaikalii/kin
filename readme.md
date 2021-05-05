@@ -1,14 +1,14 @@
 # Introduction
 
-Noot is a minimalist, dynamically-typed, pure-functional programming language without a garbage collector.
+Kin is a minimalist, dynamically-typed, pure-functional programming language without a garbage collector.
 
-Noot is designed to be easy to learn, read, write, and even implement.
+Kin is designed to be easy to learn, read, write, and even implement.
 
 # Overview
 
 ## Hello World
 
-Here is a simple Noot hello world program:
+Here is a simple Kin hello world program:
 
 ```
 println "Hello World!"
@@ -41,7 +41,7 @@ c = "wow"
 
 ## Types
 
-Noot is a dynamically-typed language.
+Kin is a dynamically-typed language.
 
 Each value can have one of 8 types:
 
@@ -181,7 +181,7 @@ message = get_err e
 
 ### Arithmetic Operators
 
-Noot has 5 binary arthimetic operators `+`, `-`, `*`, `/`, and `%` and 1 unary arithmetic operator `-`.
+Kin has 5 binary arthimetic operators `+`, `-`, `*`, `/`, and `%` and 1 unary arithmetic operator `-`.
 
 These operators only work on int and real values.
 
@@ -200,7 +200,7 @@ These operators only work on int and real values.
 ### Comparison Operators
 
 
-Noot has 6 binary comparison operators `==`, `!=`, `<`, `>`, `<=`, and `>=` and an inversion operator `not`.
+Kin has 6 binary comparison operators `==`, `!=`, `<`, `>`, `<=`, and `>=` and an inversion operator `not`.
 
 `==`, `!=`, and `not` work on values of all types. Inequality operators only work on int and real types.
 
@@ -215,9 +215,9 @@ Noot has 6 binary comparison operators `==`, `!=`, `<`, `>`, `<=`, and `>=` and 
 
 ## Control Flow
 
-Noot has only 2 control-flow operators, `or` and `and`, which also function as comparison operators.
+Kin has only 2 control-flow operators, `or` and `and`, which also function as comparison operators.
 
-Each Noot value has a "truthiness". For the purposes of control flow, `nil`, `false`, and all error values are considered false. All other values are considered true.
+Each Kin value has a "truthiness". For the purposes of control flow, `nil`, `false`, and all error values are considered false. All other values are considered true.
 
 `and` binds tighter than `or`.
 

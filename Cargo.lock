@@ -229,6 +229,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "kin"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "color-backtrace",
+ "itertools",
+ "pest",
+ "pest_derive",
+ "rpds",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -254,19 +267,6 @@ checksum = "a92518e98c078586bc6c934028adcca4c92a53d6a958196de835170a01d84e4b"
 dependencies = [
  "adler",
  "autocfg",
-]
-
-[[package]]
-name = "noot"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "color-backtrace",
- "itertools",
- "pest",
- "pest_derive",
- "rpds",
 ]
 
 [[package]]
